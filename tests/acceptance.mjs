@@ -6,6 +6,7 @@
  *
  * Uses playwright-core with the locally installed Microsoft Edge (channel "msedge").
  * Set BROWSER_CHANNEL=chrome to use Google Chrome instead.
+ * Set SKIP_EXTERNAL_LINKS=1 to skip the external link checks where outbound network is restricted.
  * These are automated checks. They do not replace listening tests for the mix.
  */
 import { chromium } from "playwright-core";
@@ -16,6 +17,7 @@ import path from "node:path";
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BASE = process.env.BASE_URL ?? "http://localhost:3100";
 const CHANNEL = process.env.BROWSER_CHANNEL ?? "msedge";
+const SKIP_EXTERNAL = process.env.SKIP_EXTERNAL_LINKS === "1";
 const OUT = path.join(ROOT, "test-results");
 mkdirSync(OUT, { recursive: true });
 
@@ -190,6 +192,8 @@ try {
       await sleep(16);
       up.push((await scene(page))?.bend ?? 0);
     }
+    // Slow frames can land the peak just after the wheel burst, so keep sampling briefly.
+    up.push(...(await sample(page, () => window.__abScene?.()?.bend ?? 0, 300)));
     check("Upward scroll reverses curvature (positive)", Math.max(...up) > 0.01, Math.max(...up).toFixed(4));
     await sleep(800);
     const s2 = await scene(page);
@@ -319,8 +323,16 @@ try {
     check("Hero mix: ground + pad + bells", a.layers?.ground > 0.4 && a.layers?.pad > 0.4 && a.layers?.bells > 0.4, JSON.stringify(a.layers));
 
     await page.mouse.move(700, 450);
-    await sleep(900);
-    const still = (await audio(page)).move;
+    // The envelope decays on the animation clock, which runs slower than wall time on slow frames.
+    // Wait up to 2 s for it to go quiet rather than reading it once.
+    let still = 1;
+    const quietBy = Date.now() + 2000;
+    await sleep(600);
+    while (Date.now() < quietBy) {
+      still = (await audio(page)).move;
+      if (still < 0.01) break;
+      await sleep(50);
+    }
     check("Stationary pointer: movement layer silent", still < 0.01, still?.toFixed(4));
     const sweep = [];
     for (let i = 0; i < 24; i++) {
@@ -660,7 +672,8 @@ try {
       const h = await (await fetch(BASE + p)).text();
       for (const m of h.matchAll(/<a [^>]*href="(https?:\/\/[^"]+)"/g)) hrefs.add(m[1].replace(/&amp;/g, "&"));
     }
-    for (const href of hrefs) {
+    if (SKIP_EXTERNAL) console.log(`  SKIP  ${hrefs.size} external link checks (SKIP_EXTERNAL_LINKS=1)`);
+    for (const href of SKIP_EXTERNAL ? [] : hrefs) {
       let status = 0;
       try {
         status = (await fetch(href, { redirect: "follow" })).status;
