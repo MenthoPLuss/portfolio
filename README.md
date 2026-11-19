@@ -21,6 +21,23 @@ SITE_URL=https://your-domain.example npm run build
 
 No secrets or API keys are needed.
 
+## Deploy
+
+The site is fully static and deploys to [Vercel](https://vercel.com) with no extra setup. `vercel.json` pins the framework, install and build commands.
+
+1. In Vercel, choose **Add New → Project** and import this GitHub repository. Keep the detected settings.
+2. Under **Settings → Environment Variables**, add `SITE_URL` for the **Production** environment, set to the real domain with `https://` and no trailing slash, for example `https://asimangkanboro.com`.
+3. Under **Settings → Domains**, add that same domain and follow Vercel's DNS instructions.
+4. Redeploy so the new `SITE_URL` is baked into the build.
+
+**`SITE_URL` must match the domain visitors use.** It sets the canonical links and the absolute URLs in social previews, and it is read at build time, so changing it needs a redeploy. If it is missing on Vercel, the build falls back to the project's `*.vercel.app` production hostname; anywhere else it falls back to `http://localhost:3000`, which breaks link previews.
+
+Every push to `main` deploys to production, and every pull request gets a preview deployment.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and every push to `main`. It installs with `npm ci`, then runs `npm run typecheck` and `npm run build`. The acceptance suite is not part of CI because it needs a locally installed Edge or Chrome.
+
 ## Edit content
 
 All text, projects, roles, skills, links and overview captions live in one file:

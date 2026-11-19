@@ -13,8 +13,14 @@ const plexMono = localFont({
   display: "swap",
 });
 
+// Absolute base for canonical and social-preview URLs. SITE_URL should be the real domain in production;
+// on Vercel the project's production hostname is used if SITE_URL is missing, so links never point at localhost.
+const siteUrl =
+  process.env.SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000");
+
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.SITE_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(siteUrl),
   title: { default: `${person.name} · Software developer from Assam`, template: `%s · ${person.name}` },
   description: person.siteDescription,
   applicationName: person.name,
