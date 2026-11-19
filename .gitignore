@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+*.tsbuildinfo
+next-env.d.ts
+test-results
+.env*
+
+# planning brief, kept local
+Asimangkan_Boro_Portfolio_Master_Prompt.md
