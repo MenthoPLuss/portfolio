@@ -5,7 +5,7 @@
  *   npm run test:acceptance            (BASE_URL defaults to http://localhost:3100)
  *
  * Uses playwright-core with the locally installed Microsoft Edge (channel "msedge").
- * Set BROWSER_CHANNEL=chrome to use Google Chrome instead.
+ * Set BROWSER_CHANNEL=chrome to use Google Chrome instead, or BROWSER_PATH to a Chromium binary.
  * These are automated checks. They do not replace listening tests for the mix.
  */
 import { chromium } from "playwright-core";
@@ -38,7 +38,7 @@ function journey(name) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const browser = await chromium.launch({
-  channel: CHANNEL,
+  ...(process.env.BROWSER_PATH ? { executablePath: process.env.BROWSER_PATH } : { channel: CHANNEL }),
   headless: true,
   args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
 });
@@ -672,7 +672,11 @@ try {
     const r = await fetch(`${BASE}/resume`);
     const rt = await r.text();
     check("Printable résumé view serves", r.status === 200 && rt.includes("Asimangkan Boro") && rt.includes(CONTACT) && rt.includes("Print or save as PDF"));
-    check("No invented résumé PDF URL", !/\.pdf"/i.test(home));
+    const pdf = await fetch(`${BASE}/asimangkan-boro-resume.pdf`);
+    const pdfHead = Buffer.from(await pdf.arrayBuffer()).subarray(0, 5).toString();
+    check("Résumé PDF serves and is linked from contact", pdf.status === 200 && pdfHead === "%PDF-" && home.includes('href="/asimangkan-boro-resume.pdf"'));
+    const photo = await fetch(`${BASE}/images/asimangkan-boro.jpg`);
+    check("About portrait photo serves and has alt text", photo.status === 200 && home.includes('class="portrait-photo"') && home.includes('alt="Asimangkan Boro'));
     for (const p of ["/icon.svg", "/opengraph-image"]) check(`Asset serves: ${p}`, (await fetch(BASE + p)).status === 200);
     check("Home has title and description", /<title>Asimangkan Boro · Software developer from Assam<\/title>/.test(home) && /<meta name="description"/.test(home));
     check("Per-case metadata", (await (await fetch(`${BASE}/work/m-phish`)).text()).includes('<meta name="description" content="M-PHISH:'));

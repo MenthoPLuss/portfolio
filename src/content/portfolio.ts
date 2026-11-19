@@ -63,8 +63,16 @@ export const person = {
     "I’m Asimangkan, a computer science student from Guwahati. At JEC, I’ve worked on campus navigation, explored ideas for EV charging, and helped organize student developer and sports teams. During my internship at Frint.in, I worked with a team on Tender AI.",
   location: "Guwahati, Assam, India",
   email: "asimangkan9@gmail.com",
-  /** No original PDF was supplied, so the printable HTML résumé is used. */
-  resume: { href: "/resume", label: "View résumé", isPdf: false },
+  /** Portrait for the About section. Files live in /public/images. */
+  photo: {
+    src: "/images/asimangkan-boro.jpg",
+    webp: "/images/asimangkan-boro.webp",
+    width: 640,
+    height: 800,
+    alt: "Asimangkan Boro in a black leather jacket, standing in a garden in front of a wooden house",
+  },
+  /** The HTML page stays the primary résumé view; the PDF is a print of it for downloading. */
+  resume: { href: "/resume", label: "View résumé", pdf: "/asimangkan-boro-resume.pdf", pdfLabel: "Download PDF" },
   siteDescription:
     "Asimangkan Boro is a final-year Computer Science and Engineering student at Jorhat Engineering College, Assam. Projects, skills, experience and contact.",
 };
@@ -349,6 +357,7 @@ export const credits = [
   { what: "3D rendering", who: "three.js", license: "MIT", href: "https://threejs.org" },
   { what: "Framework", who: "Next.js and React", license: "MIT", href: "https://nextjs.org" },
   { what: "Score and sound effects", who: "Original, synthesised live in the browser with the Web Audio API", license: "Made for this site" },
+  { what: "About portrait photo", who: "Asimangkan Boro", license: "Used with permission of the owner" },
   { what: "AB monogram, project marks, terrain and previews", who: "Original, generated in code for this site", license: "Made for this site" },
   { what: "Interaction reference", who: "orchestrated.nl, used as a reference for pacing only", license: "No assets used", href: "https://orchestrated.nl/" },
 ];
