@@ -134,15 +134,21 @@ export function Site({ initialCase }: { initialCase: string | null }) {
                 {about.heading}
               </h2>
               <figure className="portrait">
-                <div className="portrait-frame" aria-hidden="true">
-                  <svg viewBox="0 0 120 150" className="portrait-contours">
-                    {Array.from({ length: 9 }).map((_, i) => (
-                      <ellipse key={i} cx="60" cy="96" rx={14 + i * 9} ry={8 + i * 6} fill="none" />
-                    ))}
-                  </svg>
-                  <Monogram className="portrait-mark" />
+                <div className="portrait-frame">
+                  <picture>
+                    <source srcSet={person.photo.webp} type="image/webp" />
+                    <img
+                      className="portrait-photo"
+                      src={person.photo.src}
+                      width={person.photo.width}
+                      height={person.photo.height}
+                      alt={person.photo.alt}
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </picture>
                 </div>
-                <figcaption className="mono small muted">Monogram portrait · {person.location}</figcaption>
+                <figcaption className="mono small muted">{person.location}</figcaption>
               </figure>
             </div>
             <div className="about-text" data-reveal>
@@ -301,6 +307,9 @@ export function Site({ initialCase }: { initialCase: string | null }) {
             <p className="contact-links">
               <a className="text-link strong" href={person.resume.href}>
                 {person.resume.label}
+              </a>
+              <a className="text-link" href={person.resume.pdf} download>
+                {person.resume.pdfLabel}
               </a>
               <a className="text-link" href="#top">
                 Back to top
