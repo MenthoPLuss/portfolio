@@ -45,7 +45,7 @@ npm run start -- -p 3100            # in one terminal
 npm run test:acceptance             # in another; BASE_URL defaults to http://localhost:3100
 ```
 
-Use `BROWSER_CHANNEL=chrome` to run with Google Chrome instead. Screenshots and `report.json` are written to `test-results/`. Sound checks read Web Audio node values. They confirm routing, gain and timing, not how the mix sounds.
+Use `BROWSER_CHANNEL=chrome` to run with Google Chrome instead. Set `SKIP_EXTERNAL_LINKS=1` to skip the external link checks where outbound network is restricted (for example a CI sandbox). Screenshots and `report.json` are written to `test-results/`. Sound checks read Web Audio node values. They confirm routing, gain and timing, not how the mix sounds.
 
 Useful manual switches:
 
