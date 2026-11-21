@@ -1,12 +1,12 @@
 /**
- * Acceptance journeys for the portfolio, run against a production server.
+ * Acceptance journeys for "The Living Editorial", run against a production server.
  *
  *   npm run build && npm run start -- -p 3100
  *   npm run test:acceptance            (BASE_URL defaults to http://localhost:3100)
  *
  * Uses playwright-core with the locally installed Microsoft Edge (channel "msedge").
  * Set BROWSER_CHANNEL=chrome to use Google Chrome instead.
- * These are automated checks. They do not replace listening tests for the mix.
+ * Sound checks read Web Audio state. They are not listening tests.
  */
 import { chromium } from "playwright-core";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -37,24 +37,18 @@ function journey(name) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const browser = await chromium.launch({
-  channel: CHANNEL,
-  headless: true,
-  args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
-});
+const browser = await chromium.launch({ channel: CHANNEL, headless: true });
 
 async function newPage(opts = {}, { trackErrors = true } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...opts });
   await ctx.addInitScript(() => {
-    // Record when the loader releases, relative to navigation start.
-    const poll = () => {
-      if (document.documentElement?.classList.contains("loaded")) {
-        window.__loadedAt = performance.now();
-        return;
-      }
-      setTimeout(poll, 10);
+    // Count animation frames so idle loops can be detected.
+    window.__raf = 0;
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (cb) => {
+      window.__raf++;
+      return raf(cb);
     };
-    poll();
   });
   const page = await ctx.newPage();
   if (trackErrors) {
@@ -66,595 +60,477 @@ async function newPage(opts = {}, { trackErrors = true } = {}) {
   return { ctx, page };
 }
 
-const loaded = (page, timeout = 9000) => page.waitForFunction(() => document.documentElement.classList.contains("loaded"), null, { timeout });
+const ready = (page) => page.waitForFunction(() => document.documentElement.classList.contains("motion") || document.documentElement.classList.contains("reduce"));
 const audio = (page) => page.evaluate(() => (window.__abAudio ? window.__abAudio() : { state: "no-bridge" }));
-const scene = (page) => page.evaluate(() => (window.__abScene ? window.__abScene() : null));
 const html = (page) => page.evaluate(() => document.documentElement.className);
-
-async function sample(page, fn, ms, every = 40) {
-  const values = [];
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    values.push(await page.evaluate(fn));
-    await sleep(every);
-  }
-  return values;
-}
+const rafDuring = async (page, ms) => {
+  const a = await page.evaluate(() => window.__raf);
+  await sleep(ms);
+  return (await page.evaluate(() => window.__raf)) - a;
+};
+const exhibit = (page, slug) => page.locator(`#p-${slug}`).locator("xpath=ancestor::article");
 
 try {
   /* ------------------------------------------------------------------ 1 */
-  journey("1. Cold desktop visit");
+  journey("1. First impression");
   {
     const { ctx, page } = await newPage();
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
-    const loaderFoot = await page.locator(".loader-foot").innerText();
-    check("Loader shows name and role while loading", /Asimangkan Boro/.test(loaderFoot) && /Software developer/.test(loaderFoot));
-    check("Loader offers one-action project and résumé links", (await page.locator('.loader-foot a[href="#work"]').count()) === 1 && (await page.locator('.loader-foot a[href="/resume"]').count()) === 1);
-    const pct = await page.locator(".loader-pct").innerText();
-    check("Loader reports progress", /\d+%|^$/.test(pct), pct);
-    await page.screenshot({ path: `${OUT}/1-loader.png` });
-    await loaded(page);
-    await page.waitForFunction(() => window.__loadedAt, null, { timeout: 2000 }).catch(() => {});
-    const coldMs = await page.evaluate(() => Math.round(window.__loadedAt ?? -1));
-    check("Cold loader released", coldMs > 0 && coldMs < 6500, `${coldMs} ms`);
+    check("No loading screen", (await page.locator(".loader").count()) === 0);
+    check("Name, headline, résumé and nav are present at first paint", (await page.locator(".hero-name").innerText()) === "Asimangkan Boro" && (await page.locator("#hero-title").innerText()).replace(/\s+/g, " ").includes("Making digital things feel human.") && (await page.locator('.hero-actions a[href="/resume"]').count()) === 1 && (await page.locator("#site-nav a").allInnerTexts()).join(",") === "Work,About,Skills,Experience,Contact");
+    check("Headline has a single accessible name", (await page.locator("#hero-title").evaluate((h) => h.querySelector(".sr-only").textContent)) === "Making digital things feel human." && (await page.locator("#hero-title .lt").getAttribute("aria-hidden")) === "true");
     const ssr = await (await fetch(BASE)).text();
-    check("Headline, nav, projects and contact are server-rendered", ["Software developer from Assam.", 'href="#work"', "JEC Maps / JECVERSE", "M-PHISH", "Tender AI", "Plugora", `mailto:${CONTACT}`, 'href="/resume"'].every((s) => ssr.includes(s)));
-    await sleep(1200);
-    check("WebGL scene active", (await html(page)).includes(" gl"), await html(page));
-    const a0 = await audio(page);
-    check("Silent entry: no AudioContext before a gesture", a0.state === "none", a0.state);
-    check("Sound control reads Sound off", (await page.locator(".sound-btn").innerText()).includes("Sound off"));
-    await page.mouse.move(720, 600);
-    await sleep(500);
+    check("Hero, work, skills, about and contact are server-rendered", ["Making digital", "Selected work", "JEC Maps", "M-PHISH", "Tender AI", "Plugora", "Skills", "Code is what I build with.", "Have something worth building?", `mailto:${CONTACT}`, 'href="/resume"'].every((s) => ssr.includes(s)));
+    check("No WebGL canvas or three.js on the page", !ssr.includes("<canvas") && !/three/i.test(ssr.match(/<script[^>]+src="[^"]+"/g)?.join(" ") ?? ""));
+    await ready(page);
+    await sleep(1800);
     await page.screenshot({ path: `${OUT}/1-hero-desktop.png` });
-    // warm visit
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await loaded(page);
-    await page.waitForFunction(() => window.__loadedAt, null, { timeout: 2000 }).catch(() => {});
-    const warmMs = await page.evaluate(() => Math.round(window.__loadedAt ?? -1));
-    check("Warm visit dismisses within ~1.5 s", warmMs > 0 && warmMs <= 1700, `${warmMs} ms`);
-    await ctx.close();
+    check("Silent by default: no AudioContext", (await audio(page)).state === "none");
 
-    // failing 3D requests must not block navigation
-    const blocked = await newPage({}, { trackErrors: false });
-    let afterLoad = false;
-    blocked.page.on("load", () => (afterLoad = true));
-    let aborted = 0;
-    await blocked.ctx.route("**/_next/static/chunks/**", (route) => {
-      if (afterLoad) {
-        aborted++;
-        return route.abort();
-      }
-      return route.continue();
-    });
-    await blocked.page.goto(BASE, { waitUntil: "load" });
-    await loaded(blocked.page, 8000).catch(() => {});
-    const cls = await html(blocked.page);
-    check("Loader releases when lazy 3D chunk fails", cls.includes("loaded"), `${aborted} requests aborted`);
-    check("Static poster stays when 3D fails", !cls.includes(" gl"));
-    await blocked.page.click('#site-nav a[href="#work"]');
-    await sleep(300);
-    const top = await blocked.page.evaluate(() => Math.round(document.getElementById("work").getBoundingClientRect().top));
-    check("Navigation still works without 3D", Math.abs(top) <= 2, `#work top ${top}px`);
-    await blocked.ctx.close();
+    // Living Type: pointer changes glyphs without moving the layout
+    const before = await page.locator("#hero-title").boundingBox();
+    const g = page.locator(".lt-g").nth(3);
+    const gb = await g.boundingBox();
+    await page.mouse.move(gb.x + gb.width / 2 - 30, gb.y + gb.height / 2);
+    await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2, { steps: 6 });
+    await sleep(500);
+    const styled = await page.evaluate(() => Array.from(document.querySelectorAll(".lt-g")).filter((x) => x.style.fontVariationSettings || x.style.transform).length);
+    const mode = await page.locator(".lt").getAttribute("data-living");
+    const after = await page.locator("#hero-title").boundingBox();
+    check("Living Type responds to the pointer", styled > 0 && (mode === "axis" || mode === "lift"), `${styled} glyphs, mode ${mode}`);
+    check("Pointer interaction causes no layout shift", Math.abs(before.height - after.height) < 0.5 && Math.abs(before.width - after.width) < 0.5);
+    await page.screenshot({ path: `${OUT}/1-living-type.png` });
+    await page.mouse.move(700, 880);
+    await sleep(1200);
+    const idle = await rafDuring(page, 1500);
+    check("No animation loop while idle", idle <= 2, `${idle} frames requested in 1.5 s`);
+    await ctx.close();
   }
 
   /* ------------------------------------------------------------------ 2 */
-  journey("2. Scroll, fling, reverse, settle, hash links");
+  journey("2. Navigation");
   {
     const { ctx, page } = await newPage();
     await page.goto(BASE);
-    await loaded(page);
-    await sleep(1000);
-    await page.mouse.move(720, 450);
-    const hp = [];
-    for (let i = 0; i < 18; i++) {
-      await page.mouse.wheel(0, 90);
-      await sleep(70);
-      hp.push(await page.evaluate(() => getComputedStyle(document.getElementById("top")).getPropertyValue("--copy-o")));
-    }
-    const copyO = hp.map(Number);
-    check("Hero copy fades monotonically during slow descent", copyO.every((v, i) => i === 0 || v <= copyO[i - 1] + 1e-3) && copyO.at(-1) < copyO[0], copyO.map((v) => v.toFixed(2)).join(" "));
-    await page.evaluate(() => window.scrollTo(0, document.getElementById("top").offsetHeight - innerHeight));
-    await sleep(500);
-    const intro = await page.evaluate(() => Number(getComputedStyle(document.getElementById("top")).getPropertyValue("--intro-o")));
-    check("Introduction revealed at end of descent", intro > 0.95, intro);
-    await page.screenshot({ path: `${OUT}/2-descent-end.png` });
-
-    await page.evaluate(() => window.scrollTo(0, document.getElementById("work").offsetTop - 200));
-    await sleep(700);
-    const down = [];
-    for (let i = 0; i < 10; i++) {
-      await page.mouse.wheel(0, 260);
-      await sleep(16);
-      down.push((await scene(page))?.bend ?? 0);
-    }
-    const minBend = Math.min(...down);
-    check("Fast downward scroll bends gallery planes (negative)", minBend < -0.01, minBend.toFixed(4));
-    check("Bend is bounded (≤ 5% of card height)", Math.abs(minBend) <= 0.0501, minBend.toFixed(4));
-    await page.screenshot({ path: `${OUT}/2-gallery-bend.png` });
-    const t0 = Date.now();
-    let settledAt = -1;
-    while (Date.now() - t0 < 1500) {
-      const s = await scene(page);
-      if (s && Math.abs(s.bend) < 0.0005) {
-        settledAt = Date.now() - t0;
-        break;
-      }
-      await sleep(25);
-    }
-    check("Bend settles after movement stops", settledAt >= 0 && settledAt < 700, `${settledAt} ms`);
-    const up = [];
-    for (let i = 0; i < 10; i++) {
-      await page.mouse.wheel(0, -260);
-      await sleep(16);
-      up.push((await scene(page))?.bend ?? 0);
-    }
-    check("Upward scroll reverses curvature (positive)", Math.max(...up) > 0.01, Math.max(...up).toFixed(4));
-    await sleep(800);
-    const s2 = await scene(page);
-    const vis = (s2?.planes ?? []).filter((p) => p.visible);
-    const aligned = vis.every((p) => Math.abs(p.dx) < 1 && Math.abs(p.dy) < 1 && Math.abs(p.dw) < 1 && Math.abs(p.dh) < 1);
-    check("Settled planes align to DOM posters on all edges", vis.length > 0 && aligned && Math.abs(s2.bend) < 0.0005, JSON.stringify(vis));
-
-    for (const id of ["skills", "about", "contact", "work"]) {
+    await ready(page);
+    for (const id of ["work", "about", "skills", "experience", "contact"]) {
       await page.click(`#site-nav a[href="#${id}"]`);
-      const bends = await sample(page, () => (window.__abScene ? Math.abs(window.__abScene().bend) : 0), 300);
-      const top = await page.evaluate((id) => Math.round(document.getElementById(id).getBoundingClientRect().top), id);
-      await sleep(250);
-      const cur = await page.evaluate(() => document.querySelector("#site-nav a[aria-current=true]")?.getAttribute("href"));
-      check(`Hash #${id}: instant landing, no bend spike, active nav`, Math.abs(top) <= 2 && Math.max(...bends) < 0.005 && cur === `#${id}`, `top ${top}, max bend ${Math.max(...bends).toFixed(4)}, current ${cur}`);
+      await sleep(700);
+      const info = await page.evaluate((id) => {
+        const sec = document.getElementById(id).getBoundingClientRect().top;
+        const a = document.querySelector(`#site-nav a[href="#${id}"]`);
+        const bar = document.querySelector(".nav-bar");
+        const ar = a.getBoundingClientRect();
+        const br = bar.getBoundingClientRect();
+        return { sec: Math.round(sec), current: a.getAttribute("aria-current"), barOn: getComputedStyle(bar).opacity === "1", barAligned: Math.abs(br.left - ar.left) < 2 && Math.abs(br.width - ar.width) < 2 };
+      }, id);
+      check(`Nav #${id}: lands below the header, marks the active link, indicator aligned`, info.sec >= 50 && info.sec <= 80 && info.current === "true" && info.barOn && info.barAligned, JSON.stringify(info));
     }
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.evaluate(() => document.getElementById("leadership").scrollIntoView());
     await sleep(600);
-    const back = await page.evaluate(() => Number(getComputedStyle(document.getElementById("top")).getPropertyValue("--copy-o")));
-    check("Reverse scroll restores hero copy", back > 0.99, back);
+    check("Leadership and education light up Experience", (await page.locator('#site-nav a[aria-current="true"]').innerText()) === "Experience");
+    await page.evaluate(() => scrollTo(0, 0));
+    await sleep(600);
+    check("Indicator hides on the hero", (await page.locator(".nav-bar").evaluate((b) => getComputedStyle(b).opacity)) === "0");
     await ctx.close();
   }
 
   /* ------------------------------------------------------------------ 3 */
-  journey("3. Case study from gallery, Escape, Back, direct URL");
+  journey("3. Project exhibits");
   {
     const { ctx, page } = await newPage();
     await page.goto(BASE);
-    await loaded(page);
-    const link = page.locator('[data-case-link="jec-maps"]');
-    // Centre the link first so the click itself does not scroll the page.
+    await ready(page);
+
+    // JEC Maps
+    const maps = exhibit(page, "jec-maps");
+    await maps.scrollIntoViewIfNeeded();
+    await sleep(900);
+    await maps.getByRole("button", { name: "Library" }).click();
+    await sleep(1500);
+    const m1 = await maps.evaluate((a) => ({
+      pressed: a.querySelector('.maps-dests button[aria-pressed="true"]')?.textContent,
+      dest: a.querySelector(".maps-info dd")?.textContent,
+      route: !!a.querySelector(".maps-route"),
+      dot: [Number(a.querySelector(".maps-traveller")?.getAttribute("cx")), Number(a.querySelector(".maps-traveller")?.getAttribute("cy"))],
+      via: a.querySelectorAll(".maps-info dd")[1]?.textContent,
+    }));
+    check("JEC Maps: choosing a destination draws a computed route", m1.pressed === "Library" && m1.dest === "Library" && m1.route && /Junction/.test(m1.via), JSON.stringify(m1));
+    check("JEC Maps: marker arrives at the destination", Math.abs(m1.dot[0] - 64) < 0.5 && Math.abs(m1.dot[1] - 14) < 0.5, m1.dot.join(","));
+    check("JEC Maps: route animation stops when done", (await rafDuring(page, 1000)) <= 2);
+    await page.screenshot({ path: `${OUT}/3-jec-maps.png` });
+    await maps.locator('.maps-place:has-text("HOSTEL")').click();
+    await sleep(300);
+    check("JEC Maps: map buildings are selectable too", (await maps.locator(".maps-info dd").first().innerText()) === "Hostel");
+    await maps.getByRole("button", { name: "Reset route" }).click();
+    check("JEC Maps: reset clears the route", (await maps.locator(".maps-route").count()) === 0 && (await maps.locator(".maps-info dd").first().innerText()) === "Not selected");
+
+    // M-PHISH
+    const phish = exhibit(page, "m-phish");
+    await phish.scrollIntoViewIfNeeded();
+    await sleep(900);
+    await phish.getByRole("button", { name: /Refund request/ }).click();
+    await phish.getByRole("button", { name: "Inspect message" }).click();
+    await sleep(1200);
+    const p1 = await phish.evaluate((a) => ({ level: a.querySelector(".phish-level")?.textContent, signals: a.querySelectorAll(".phish-signals li").length, marks: a.querySelectorAll(".phish-mark").length, links: a.querySelectorAll(".phish-message a").length }));
+    check("M-PHISH: risky message is explained with highlighted signals", p1.level === "High risk" && p1.signals >= 3 && p1.marks >= 2, JSON.stringify(p1));
+    check("M-PHISH: sample links are never live links", p1.links === 0);
+    await page.screenshot({ path: `${OUT}/3-m-phish.png` });
+    await phish.getByRole("button", { name: /Event update/ }).click();
+    check("M-PHISH: switching messages clears the old report", (await phish.locator(".phish-level").count()) === 0);
+    await phish.getByRole("button", { name: "Inspect message" }).click();
+    await sleep(600);
+    check("M-PHISH: benign message reads as low risk with no signals", (await phish.locator(".phish-level").innerText()) === "Low risk" && (await phish.locator(".phish-signals li").count()) === 0);
+    await phish.getByRole("button", { name: "Clear inspection" }).click();
+    check("M-PHISH: clear resets the report", (await phish.locator(".phish-empty").count()) === 1);
+
+    // Tender AI
+    const tender = exhibit(page, "tender-ai");
+    await tender.scrollIntoViewIfNeeded();
+    await sleep(900);
+    await tender.getByRole("button", { name: "CCTV upkeep" }).click();
+    await tender.getByRole("button", { name: "Extract fields" }).click();
+    await sleep(500);
+    const midway = await tender.locator('.tender-doc li[data-current="true"]').count();
+    await sleep(2400);
+    const t1 = await tender.evaluate((a) => ({ filled: a.querySelectorAll('.tender-fields div[data-filled="true"]').length, sources: a.querySelectorAll('.tender-doc li[data-source="true"]').length, value: a.querySelectorAll(".tender-fields dd")[2]?.textContent }));
+    check("Tender AI: extraction steps through fields and source lines", midway === 1 && t1.filled === 6 && t1.sources === 6 && t1.value === "₹7,20,000", JSON.stringify({ midway, ...t1 }));
+    await page.screenshot({ path: `${OUT}/3-tender-ai.png` });
+    await tender.getByRole("button", { name: "Compare all three" }).click();
+    const t2 = await tender.evaluate((a) => Array.from(a.querySelectorAll("tbody tr")).map((r) => [r.querySelector("th").textContent, Array.from(r.querySelectorAll("em")).map((e) => e.textContent)]));
+    check("Tender AI: comparison highlights the right tenders", t2.length === 3 && t2.find((r) => r[0].startsWith("Campus CCTV"))[1].includes("Closes first") && t2.find((r) => r[0].startsWith("Campus CCTV"))[1].includes("Lowest EMD") && t2.find((r) => r[0].startsWith("Hostel solar"))[1].includes("Highest value"), JSON.stringify(t2));
+    await tender.getByRole("button", { name: "Lab computers" }).click();
+    check("Tender AI: choosing a document returns to the document view", (await tender.locator(".tender-doc").count()) === 1);
+
+    // Plugora
+    const plug = exhibit(page, "plugora");
+    await plug.scrollIntoViewIfNeeded();
+    await sleep(900);
+    await plug.getByRole("button", { name: /Park Road garage/ }).click();
+    const taken = await plug.locator('.plug-slots [role="group"] button:disabled').allInnerTexts();
+    check("Plugora: selecting a charger shows sample slots, taken ones disabled", taken.length === 1 && taken[0].startsWith("18:00"), taken.join(","));
+    check("Plugora: request is disabled until a slot is chosen", await plug.getByRole("button", { name: "Pick a slot" }).isDisabled());
+    await plug.locator(".plug-slots button", { hasText: "19:00" }).click();
+    await plug.getByRole("button", { name: /Request 19:00/ }).click();
+    const conf = await plug.locator(".plug-confirm").innerText();
+    check("Plugora: simulated confirmation says nothing was booked", /nothing booked/i.test(conf) && conf.includes("Park Road garage") && conf.includes("19:00"), conf.replace(/\s+/g, " "));
+    await page.screenshot({ path: `${OUT}/3-plugora.png` });
+    await plug.getByRole("button", { name: "Start over" }).click();
+    check("Plugora: start over resets", (await plug.locator(".plug-confirm").count()) === 0 && (await plug.locator('.plug-item[aria-pressed="true"]').count()) === 0);
+    await plug.locator('.plug-pin:has-text("C")').click();
+    check("Plugora: map pins are selectable", (await plug.locator('.plug-item[aria-pressed="true"]').innerText()).includes("Riverside"));
+
+    // keyboard operation of a demo
+    await maps.scrollIntoViewIfNeeded();
+    await maps.getByRole("button", { name: "Canteen" }).focus();
+    await page.keyboard.press("Enter");
+    await sleep(1400);
+    check("Demos are keyboard-operable", (await maps.locator(".maps-info dd").first().innerText()) === "Canteen");
+    check("Demo state changes are announced politely", (await maps.locator('[aria-live="polite"]').innerText()).startsWith("Route to Canteen"));
+    await ctx.close();
+  }
+
+  /* ------------------------------------------------------------------ 4 */
+  journey("4. Case studies, history and focus");
+  {
+    const { ctx, page } = await newPage();
+    await page.goto(BASE);
+    await ready(page);
     await page.evaluate(() => document.querySelector('[data-case-link="jec-maps"]').scrollIntoView({ block: "center" }));
     await sleep(1200);
-    // Record the scroll position at the moment the visitor presses, which is what must be restored.
     await page.evaluate(() => window.addEventListener("pointerdown", () => (window.__yAtPress = scrollY), { capture: true, once: true }));
+    const link = page.locator('[data-case-link="jec-maps"]');
     await link.click();
     const y0 = await page.evaluate(() => window.__yAtPress);
     await page.waitForSelector('[role="dialog"]');
-    await sleep(300);
+    await sleep(800);
     check("URL becomes /work/jec-maps", new URL(page.url()).pathname === "/work/jec-maps", page.url());
-    check("Dialog is named by the case title", (await page.locator('[role="dialog"]').getAttribute("aria-labelledby")) === "case-title" && (await page.locator("#case-title").innerText()) === "JEC Maps / JECVERSE");
-    check("Document title follows the case", (await page.title()).startsWith("JEC Maps / JECVERSE"), await page.title());
+    check("Dialog is named by the case title", (await page.locator("#case-title").innerText()) === "JEC Maps" && (await page.locator('[role="dialog"]').getAttribute("aria-labelledby")) === "case-title");
+    check("Document title follows the case", (await page.title()).startsWith("JEC Maps ·"), await page.title());
     check("Focus moves into the dialog", await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]')));
-    let trapped = true;
-    const visited = new Set();
-    for (let i = 0; i < 24; i++) {
-      await page.keyboard.press("Tab");
-      const info = await page.evaluate(() => ({ inside: !!document.activeElement?.closest('[role="dialog"]'), label: document.activeElement?.textContent?.trim().slice(0, 30) }));
-      if (!info.inside) trapped = false;
-      visited.add(info.label);
-    }
-    check("Tab stays trapped inside the dialog", trapped, [...visited].join(" | "));
-    check("Page behind is inert", (await page.locator("#page").getAttribute("inert")) !== null);
-    await page.screenshot({ path: `${OUT}/3-case-desktop.png` });
-    await page.keyboard.press("Escape");
+    check("Case media is the live demo with the shared transition name", (await page.locator(".case-media .stage").evaluate((s) => s.style.viewTransitionName)) === "stage-jec-maps" && (await page.locator("article .stage-jec-maps").evaluate((s) => s.style.viewTransitionName)) === "");
+    await page.locator(".case-media").getByRole("button", { name: "Labs" }).click();
     await sleep(300);
-    check("Escape closes the case", (await page.locator('[role="dialog"]').count()) === 0);
-    check("URL returns to /", new URL(page.url()).pathname === "/", page.url());
+    check("Demo works inside the case study", (await page.locator(".case-media .maps-info dd").first().innerText()) === "Labs");
+    let trapped = true;
+    for (let i = 0; i < 30; i++) {
+      await page.keyboard.press("Tab");
+      if (!(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]')))) trapped = false;
+    }
+    check("Tab stays trapped inside the dialog", trapped);
+    check("Page behind is inert", (await page.locator("#page").getAttribute("inert")) !== null);
+    await page.screenshot({ path: `${OUT}/4-case-desktop.png` });
+    await page.keyboard.press("Escape");
+    await sleep(900);
+    check("Escape closes the case", (await page.locator('[role="dialog"]').count()) === 0 && new URL(page.url()).pathname === "/");
     const y1 = await page.evaluate(() => scrollY);
-    check("Gallery scroll position restored exactly", Math.abs(y1 - y0) <= 1, `${y0} → ${y1}`);
-    check("Focus returns to the View case link", await page.evaluate(() => document.activeElement?.getAttribute("data-case-link") === "jec-maps"));
+    check("Scroll position restored exactly", Math.abs(y1 - y0) <= 1, `${y0} → ${y1}`);
+    check("Focus returns to the case link", await page.evaluate(() => document.activeElement?.getAttribute("data-case-link") === "jec-maps"));
 
     await link.click();
     await page.waitForSelector('[role="dialog"]');
+    await sleep(700);
     await page.goBack();
-    await sleep(400);
+    await sleep(900);
     check("Browser Back closes the case", (await page.locator('[role="dialog"]').count()) === 0 && new URL(page.url()).pathname === "/");
-    check("Back restores scroll position", Math.abs((await page.evaluate(() => scrollY)) - y1) <= 1);
     await page.goForward();
-    await sleep(400);
+    await sleep(900);
     check("Forward reopens the case", (await page.locator("#case-title").count()) === 1 && new URL(page.url()).pathname === "/work/jec-maps");
     await page.click(".case-next");
-    await sleep(300);
-    check("Next case swaps in place with its own URL", new URL(page.url()).pathname === "/work/m-phish" && (await page.locator("#case-title").innerText()) === "M-PHISH");
+    await sleep(500);
+    check("Next case swaps in place", new URL(page.url()).pathname === "/work/m-phish" && (await page.locator("#case-title").innerText()) === "M-PHISH");
     await page.click(".case-close");
-    await sleep(300);
-    check("Close after switching returns to gallery", (await page.locator('[role="dialog"]').count()) === 0 && new URL(page.url()).pathname === "/");
+    await sleep(900);
+    check("Close returns to the gallery", (await page.locator('[role="dialog"]').count()) === 0 && new URL(page.url()).pathname === "/");
     await ctx.close();
 
     const raw = await (await fetch(`${BASE}/work/jec-maps`)).text();
-    check("Direct case URL is server-rendered with the dialog", raw.includes('role="dialog"') && raw.includes("JEC Maps / JECVERSE") && raw.includes("<title>JEC Maps / JECVERSE · Asimangkan Boro</title>"));
+    check("Direct case URL is server-rendered with the dialog and metadata", raw.includes('role="dialog"') && raw.includes("<title>JEC Maps · Asimangkan Boro</title>") && raw.includes('<meta name="description" content="JEC Maps:'));
     const d = await newPage();
     await d.page.goto(`${BASE}/work/jec-maps`);
     await d.page.waitForSelector("#case-title");
-    check("Direct entry skips the loader", (await d.page.locator(".loader").count()) === 0);
     await d.page.reload();
     await d.page.waitForSelector("#case-title");
     check("Refresh keeps the case open", new URL(d.page.url()).pathname === "/work/jec-maps");
     await d.page.waitForFunction(() => window.__abCaseAdopted === true, null, { timeout: 5000 });
     await d.page.goBack();
-    await sleep(500);
+    await sleep(900);
     const afterBack = await d.page.evaluate(() => ({ path: location.pathname, hash: location.hash, top: Math.round(document.getElementById("work").getBoundingClientRect().top), open: !!document.querySelector('[role="dialog"]') }));
-    check("Back from a direct case lands on #work", !afterBack.open && afterBack.path === "/" && afterBack.hash === "#work" && Math.abs(afterBack.top) <= 2, JSON.stringify(afterBack));
+    check("Back from a direct case lands on #work", !afterBack.open && afterBack.path === "/" && afterBack.hash === "#work" && afterBack.top >= 0 && afterBack.top <= 80, JSON.stringify(afterBack));
     await d.page.goto(`${BASE}/work/plugora`);
     await d.page.waitForSelector("#case-title");
     await d.page.waitForFunction(() => window.__abCaseAdopted === true, null, { timeout: 5000 });
-    await sleep(300);
     await d.page.click(".case-close");
-    await sleep(500);
-    const afterClose = await d.page.evaluate(() => ({ path: location.pathname, hash: location.hash, top: Math.round(document.getElementById("work").getBoundingClientRect().top), focus: document.activeElement?.id }));
-    check("Closing a direct case goes to #work and focuses it", afterClose.path === "/" && afterClose.hash === "#work" && Math.abs(afterClose.top) <= 2 && afterClose.focus === "work-title", JSON.stringify(afterClose));
+    await sleep(900);
+    const afterClose = await d.page.evaluate(() => ({ path: location.pathname, hash: location.hash, focus: document.activeElement?.id }));
+    check("Closing a direct case goes to #work and focuses it", afterClose.path === "/" && afterClose.hash === "#work" && afterClose.focus === "work-title", JSON.stringify(afterClose));
     await d.ctx.close();
-    const bad = await fetch(`${BASE}/work/not-a-case`);
-    check("Unknown case URL returns 404", bad.status === 404, bad.status);
-  }
-
-  /* ------------------------------------------------------------------ 4 */
-  journey("4. Sound (automated signal checks, not a listening test)");
-  {
-    const { ctx, page } = await newPage();
-    await page.goto(BASE);
-    await loaded(page);
-    await sleep(600);
-    await page.mouse.move(100, 400);
-    for (let x = 100; x < 1300; x += 120) await page.mouse.move(x, 400);
-    await page.mouse.wheel(0, 800);
-    await sleep(300);
-    check("Sound disabled: interactions create no audio", (await audio(page)).state === "none");
-    await page.evaluate(() => scrollTo(0, 0));
-    await sleep(300);
-
-    await page.click(".sound-btn");
-    await page.waitForFunction(() => window.__abAudio?.().state === "running", null, { timeout: 5000 }).catch(() => {});
-    await sleep(1500);
-    let a = await audio(page);
-    check("Sound on after explicit click", a.state === "running" && a.enabled === true && a.master > 0.2, JSON.stringify({ state: a.state, master: a.master }));
-    check("Control reflects real state", (await page.locator(".sound-btn").getAttribute("aria-pressed")) === "true" && (await page.locator(".sound-btn").innerText()).includes("Sound on"));
-    check("Hero mix: ground + pad + bells", a.layers?.ground > 0.4 && a.layers?.pad > 0.4 && a.layers?.bells > 0.4, JSON.stringify(a.layers));
-
-    await page.mouse.move(700, 450);
-    await sleep(900);
-    const still = (await audio(page)).move;
-    check("Stationary pointer: movement layer silent", still < 0.01, still?.toFixed(4));
-    const sweep = [];
-    for (let i = 0; i < 24; i++) {
-      await page.mouse.move(100 + (i % 2 ? 1200 : 0), 450, { steps: 4 });
-      sweep.push((await audio(page)).move);
-    }
-    check("Fast horizontal sweep raises the movement envelope", Math.max(...sweep) > 0.05, Math.max(...sweep).toFixed(3));
-    check("Pointer layer stays below the bed (envelope ≤ 0.55)", Math.max(...sweep) <= 0.56, Math.max(...sweep).toFixed(3));
-    await sleep(1200);
-    const idle = (await audio(page)).move;
-    check("Idle decay after movement", idle < 0.01, idle.toFixed(4));
-    await page.mouse.move(700, 20, { steps: 6 });
-    await sleep(900);
-    const topCut = (await audio(page)).airCutoff;
-    await page.mouse.move(700, 890, { steps: 6 });
-    await sleep(900);
-    const botCut = (await audio(page)).airCutoff;
-    check("Vertical pointer maps air cutoff ≈1.2 kHz top → 450 Hz bottom", topCut > 1050 && botCut < 520, `${Math.round(topCut)} Hz → ${Math.round(botCut)} Hz`);
-
-    const slow = [];
-    for (let i = 0; i < 12; i++) {
-      await page.mouse.wheel(0, 30);
-      await sleep(90);
-      slow.push((await audio(page)).scroll);
-    }
-    const fast = [];
-    for (let i = 0; i < 12; i++) {
-      await page.mouse.wheel(0, 300);
-      await sleep(16);
-      fast.push((await audio(page)).scroll);
-    }
-    check("Fast scroll is louder than slow scroll", Math.max(...fast) > Math.max(...slow) * 2 && Math.max(...fast) > 0.03, `slow ${Math.max(...slow).toFixed(3)} fast ${Math.max(...fast).toFixed(3)}`);
-    await sleep(1500);
-    check("Scroll layer fades back after a pass", (await audio(page)).scroll < 0.01);
-    await page.click('#site-nav a[href="#contact"]');
-    await sleep(300);
-    const jump = (await audio(page)).scroll;
-    check("Anchor jump does not trigger a scroll whoosh", jump < 0.01, jump.toFixed(4));
-
-    await sleep(2200);
-    a = await audio(page);
-    check("Contact reintroduces bells and pulse", a.section === "contact" && a.layers.pulse > 0.25 && a.layers.bells > 0.35, JSON.stringify(a.layers));
-    await page.click('#site-nav a[href="#work"]');
-    for (let i = 0; i < 6; i++) {
-      await page.mouse.wheel(0, i % 2 ? -400 : 400);
-      await sleep(40);
-    }
-    await sleep(2400);
-    a = await audio(page);
-    check("Work thins bells", a.section === "work" && a.layers.bells < 0.2, `${a.section} ${JSON.stringify(a.layers)}`);
-
-    const link = page.locator('[data-case-link="m-phish"]');
-    await link.scrollIntoViewIfNeeded();
-    await link.click();
-    await sleep(1600);
-    a = await audio(page);
-    check("Case reading drops bells further", a.section === "case" && a.layers.bells < 0.1, JSON.stringify(a.layers));
-    await page.keyboard.press("Escape");
-    await sleep(400);
-
-    const voices = [];
-    await page.evaluate(() => scrollTo(0, 0));
-    await sleep(300);
-    const navBoxes = await page.locator("#site-nav a").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => [r.x + r.width / 2, r.y + r.height / 2]));
-    for (let i = 0; i < 40; i++) {
-      const [x, y] = navBoxes[i % navBoxes.length];
-      await page.mouse.move(x, y);
-      voices.push((await audio(page)).shortVoices);
-    }
-    check("Sweeping controls never piles up short voices (cap 10)", Math.max(...voices) <= 10, `max ${Math.max(...voices)}`);
-
-    await page.mouse.move(10, 10);
-    await page.click(".play-overview");
-    await page.waitForSelector(".overview-panel");
-    await sleep(900);
-    a = await audio(page);
-    check("Overview fades page music down and takes its own bus", a.music < 0.1 && a.overview > 0.8, `music ${a.music.toFixed(3)} overview ${a.overview.toFixed(3)}`);
-    const cap1 = await page.locator(".overview-caption").innerText();
-    await sleep(3200);
-    const cap2 = await page.locator(".overview-caption").innerText();
-    check("Overview advances with visible captions", cap1 !== cap2 && cap2.includes("JEC Maps"), `${cap1} → ${cap2}`);
-    await page.screenshot({ path: `${OUT}/4-overview.png` });
-    await page.click(".overview-controls button:first-child");
-    await sleep(500);
-    check("Overview pause silences its bus", (await audio(page)).overview < 0.2);
-    await page.keyboard.press("Escape");
-    await sleep(1600);
-    a = await audio(page);
-    check("Closing overview restores the page mix", a.music > 0.8 && a.overview < 0.05 && a.enabled, `music ${a.music.toFixed(3)}`);
-    check("Focus returns to Play overview", await page.evaluate(() => document.activeElement?.hasAttribute("data-overview-trigger")));
-
-    await page.click(".vol-btn");
-    await page.evaluate(() => {
-      const r = document.querySelector('.volume-pop input[type="range"]');
-      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
-      set.call(r, "20");
-      r.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await sleep(800);
-    a = await audio(page);
-    check("Volume slider sets master gain", Math.abs(a.master - 0.2 * 0.85) < 0.03, a.master.toFixed(3));
-    check("Volume remembered", (await page.evaluate(() => localStorage.getItem("ab.volume"))) === "0.20");
-    await page.keyboard.press("Escape");
-
-    await page.evaluate(() => {
-      Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
-      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
-      document.dispatchEvent(new Event("visibilitychange"));
-    });
-    await sleep(800);
-    check("Hidden tab suspends processing", (await audio(page)).state === "suspended", (await audio(page)).state);
-    await page.evaluate(() => {
-      Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
-      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
-      document.dispatchEvent(new Event("visibilitychange"));
-    });
-    await sleep(900);
-    check("Visible again restores permitted playback", (await audio(page)).state === "running");
-
-    await page.click(".sound-btn");
-    await sleep(900);
-    a = await audio(page);
-    check("Sound off mutes and suspends", !a.enabled && a.master < 0.02 && a.state === "suspended", `${a.state} ${a.master.toFixed(3)}`);
-    check("Mute preference stored", (await page.evaluate(() => localStorage.getItem("ab.sound"))) === "off");
-    await page.click(".sound-btn");
-    await sleep(600);
-    await page.reload();
-    await loaded(page);
-    await sleep(300);
-    check("Remembered sound waits for a gesture after reload", (await page.locator(".sound-btn").innerText()).includes("Resume sound") && (await audio(page)).state === "none");
-    await page.mouse.click(700, 700);
-    await sleep(1500);
-    check("First gesture resumes remembered sound", (await audio(page)).state === "running" && (await page.locator(".sound-btn").innerText()).includes("Sound on"));
-    await page.click(".sound-btn");
-    await ctx.close();
+    check("Unknown case URL returns 404", (await fetch(`${BASE}/work/not-a-case`)).status === 404);
   }
 
   /* ------------------------------------------------------------------ 5 */
-  journey("5. Phones, keyboard, reduced motion, WebGL fallback");
+  journey("5. Responsive layouts");
   for (const vp of [
-    { width: 390, height: 844, name: "390" },
-    { width: 360, height: 740, name: "360" },
+    { width: 360, height: 740, name: "360", touch: true },
+    { width: 390, height: 844, name: "390", touch: true },
+    { width: 768, height: 1024, name: "768", touch: true },
+    { width: 1440, height: 900, name: "1440", touch: false },
+    { width: 1920, height: 1080, name: "1920", touch: false },
   ]) {
-    const { ctx, page } = await newPage({ viewport: { width: vp.width, height: vp.height }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    const { ctx, page } = await newPage({ viewport: { width: vp.width, height: vp.height }, isMobile: vp.touch && vp.width < 700, hasTouch: vp.touch, deviceScaleFactor: vp.width < 700 ? 2 : 1 });
     await page.goto(BASE);
-    await loaded(page);
-    await sleep(800);
+    await ready(page);
+    await sleep(1600);
     await page.screenshot({ path: `${OUT}/5-hero-${vp.name}.png` });
     const overflow = [];
     const H = await page.evaluate(() => document.documentElement.scrollHeight);
     for (let y = 0; y < H; y += vp.height * 0.8) {
       await page.evaluate((y) => scrollTo(0, y), y);
-      await sleep(60);
+      await sleep(40);
       const o = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       if (o > 0) overflow.push(`${Math.round(y)}:${o}`);
     }
     check(`${vp.name}px: no horizontal overflow`, overflow.length === 0, overflow.join(" "));
-    await page.evaluate(() => scrollTo(0, 0));
-    await sleep(300);
-    const play = await page.locator(".play-overview").boundingBox();
-    check(`${vp.name}px: Play overview visible and ≥44 px`, play && play.height >= 44 && play.x >= 0 && play.x + play.width <= vp.width && (await page.locator(".play-overview").innerText()).includes("Play overview"), JSON.stringify(play));
-    const links = await page.locator(".hero-links a").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ t: r.top, b: r.bottom, l: r.left, r: r.right })));
-    const dock = await page.locator(".sound-dock").boundingBox();
-    const clash = links.some((r) => !(r.b <= dock.y || r.t >= dock.y + dock.height || r.r <= dock.x || r.l >= dock.x + dock.width));
-    check(`${vp.name}px: fixed sound control does not cover hero links`, !clash);
-    const markBox = await page.locator("[data-mark-box]").boundingBox();
-    const copyBox = await page.locator(".hero-copy").boundingBox();
-    check(`${vp.name}px: monogram and headline do not overlap`, markBox.y + markBox.height <= copyBox.y + 2, `mark bottom ${Math.round(markBox.y + markBox.height)}, copy top ${Math.round(copyBox.y)}`);
-    await page.tap(".menu-btn");
-    await sleep(200);
-    check(`${vp.name}px: menu opens with Work, Skills, About, Contact`, (await page.locator("#site-nav").isVisible()) && (await page.locator("#site-nav a").allInnerTexts()).join(",") === "Work,Skills,About,Contact");
-    await page.screenshot({ path: `${OUT}/5-menu-${vp.name}.png` });
-    await page.tap('#site-nav a[href="#work"]');
-    await sleep(400);
-    check(`${vp.name}px: menu link navigates and closes menu`, !(await page.locator("#site-nav").isVisible()) && (await page.evaluate(() => location.hash)) === "#work");
-    const lefts = await page.locator(".work-grid article").evaluateAll((els) => els.map((e) => [Math.round(e.getBoundingClientRect().left), Math.round(e.getBoundingClientRect().top), e.querySelector("h3").textContent]));
-    check(`${vp.name}px: single-column gallery in project order`, lefts.every((l) => l[0] === lefts[0][0]) && lefts.every((l, i) => i === 0 || l[1] > lefts[i - 1][1]) && lefts.map((l) => l[2]).join("|") === "JEC Maps / JECVERSE|M-PHISH|Tender AI|Plugora");
-    await page.screenshot({ path: `${OUT}/5-work-${vp.name}.png` });
-    const view = page.locator('[data-case-link="tender-ai"]');
-    await view.scrollIntoViewIfNeeded();
-    await view.tap();
-    await page.waitForSelector(".case-panel");
-    await sleep(500);
-    const sheet = await page.locator(".case-panel").boundingBox();
-    const scrollable = await page.locator(".case-panel").evaluate((e) => e.scrollHeight > e.clientHeight);
-    check(`${vp.name}px: case opens as a full-height reading sheet with its own scroll`, Math.round(sheet.x) === 0 && Math.round(sheet.width) === vp.width && Math.round(sheet.height) === vp.height && scrollable, JSON.stringify(sheet));
-    await page.screenshot({ path: `${OUT}/5-case-${vp.name}.png` });
-    const closeBox = await page.locator(".case-close").boundingBox();
-    check(`${vp.name}px: Close button ≥44 px`, closeBox.height >= 44 && closeBox.width >= 44);
-    await page.tap(".case-close");
-    await sleep(300);
-    for (const id of ["skills", "experience", "contact"]) {
+    const exhibitsFit = await page.evaluate(() => Array.from(document.querySelectorAll(".exhibit .stage")).every((s) => s.getBoundingClientRect().right <= document.documentElement.clientWidth + 0.5));
+    check(`${vp.name}px: demo stages fit the viewport`, exhibitsFit);
+    if (vp.width <= 768) {
+      await page.evaluate(() => scrollTo(0, 0));
+      await page.tap(".menu-btn");
+      await sleep(200);
+      check(`${vp.name}px: menu opens with all sections`, (await page.locator("#site-nav").isVisible()) && (await page.locator("#site-nav a").allInnerTexts()).join(",") === "Work,About,Skills,Experience,Contact");
+      await page.screenshot({ path: `${OUT}/5-menu-${vp.name}.png` });
+      await page.tap('#site-nav a[href="#skills"]');
+      await sleep(500);
+      check(`${vp.name}px: menu link navigates and closes`, !(await page.locator("#site-nav").isVisible()) && (await page.evaluate(() => location.hash)) === "#skills");
+      const small = await page.evaluate(() =>
+        Array.from(document.querySelectorAll("#page a[href], #page button, #page summary"))
+          .filter((e) => e.offsetParent !== null && !e.closest(".capsule") && !e.classList.contains("term") && !e.closest(".credits"))
+          .map((e) => [e.textContent.trim().slice(0, 24), Math.round(e.getBoundingClientRect().height)])
+          .filter(([, h]) => h > 0 && h < 44),
+      );
+      check(`${vp.name}px: touch targets ≥ 44 px (inline prose terms excepted)`, small.length === 0, JSON.stringify(small));
+      const order = await page.evaluate(() => Array.from(document.querySelectorAll(".exhibit")).map((a) => {
+        const t = a.querySelector(".exhibit-text").getBoundingClientRect();
+        const f = a.querySelector(".exhibit-figure").getBoundingClientRect();
+        return f.top > t.top;
+      }));
+      check(`${vp.name}px: each exhibit stacks text then demo`, order.every(Boolean));
+      const maps = exhibit(page, "jec-maps");
+      await maps.scrollIntoViewIfNeeded();
+      await maps.getByRole("button", { name: "Library" }).tap();
+      await sleep(1400);
+      check(`${vp.name}px: demos work by touch`, (await maps.locator(".maps-info dd").first().innerText()) === "Library");
+      await page.screenshot({ path: `${OUT}/5-demo-${vp.name}.png` });
+      const view = page.locator('[data-case-link="tender-ai"]');
+      await view.scrollIntoViewIfNeeded();
+      await view.tap();
+      await page.waitForSelector(".case-panel");
+      await sleep(900);
+      const sheet = await page.locator(".case-panel").boundingBox();
+      if (vp.width < 700) check(`${vp.name}px: case opens as a full-screen reading sheet`, Math.round(sheet.x) === 0 && Math.round(sheet.width) === vp.width && Math.round(sheet.height) === vp.height, JSON.stringify(sheet));
+      await page.screenshot({ path: `${OUT}/5-case-${vp.name}.png` });
+      await page.tap(".case-close");
+      await sleep(700);
+      await page.evaluate(() => document.getElementById("contact").scrollIntoView());
+      await sleep(900);
+      const email = await page.locator(".contact-email").boundingBox();
+      check(`${vp.name}px: email fits the viewport`, email.x >= 0 && email.x + email.width <= vp.width + 0.5);
+      check(`${vp.name}px: no custom cursor on touch`, !(await html(page)).includes("has-cursor"));
+    }
+    for (const id of ["work", "about", "skills", "leadership", "contact"]) {
       await page.evaluate((id) => document.getElementById(id).scrollIntoView(), id);
       await sleep(900);
       await page.screenshot({ path: `${OUT}/5-${id}-${vp.name}.png` });
     }
-    const email = await page.locator(".email-big").boundingBox();
-    check(`${vp.name}px: email fits the viewport`, email.x >= 0 && email.x + email.width <= vp.width, JSON.stringify(email));
-    check(`${vp.name}px: résumé reachable from contact`, (await page.locator('.contact-links a[href="/resume"]').count()) === 1);
-    const small = await page.evaluate(() =>
-      Array.from(document.querySelectorAll("#page a[href], #page button"))
-        .filter((e) => e.offsetParent !== null && !e.closest(".capsule") && !e.classList.contains("poster-link") && !e.closest(".credits li"))
-        .map((e) => [e.textContent.trim().slice(0, 24), Math.round(e.getBoundingClientRect().height)])
-        .filter(([, h]) => h > 0 && h < 44),
-    );
-    check(`${vp.name}px: touch targets ≥44 px tall (inline prose terms excepted)`, small.every(([t]) => ["campus navigation", "student developers", "college sports"].includes(t)), JSON.stringify(small));
-    check(`${vp.name}px: no custom cursor on touch`, !(await html(page)).includes("cursor"));
-    await ctx.close();
-  }
-
-  {
-    const { ctx, page } = await newPage();
-    await page.goto(BASE);
-    await loaded(page);
-    await page.keyboard.press("Tab");
-    check("First Tab reaches the skip link", (await page.evaluate(() => document.activeElement?.className)) === "skip-link");
-    await page.keyboard.press("Enter");
-    await sleep(200);
-    check("Skip link moves focus to main", (await page.evaluate(() => document.activeElement?.id)) === "main");
-    let reachedTerm = false;
-    let reachedCase = false;
-    for (let i = 0; i < 60 && !reachedCase; i++) {
-      await page.keyboard.press("Tab");
-      const info = await page.evaluate(() => ({ cls: document.activeElement?.className, slug: document.activeElement?.getAttribute("data-case-link"), outline: getComputedStyle(document.activeElement).outlineStyle }));
-      if (info.cls === "term" && !reachedTerm) {
-        reachedTerm = true;
-        const shown = await page.evaluate(() => {
-          const t = document.activeElement;
-          const cap = document.getElementById(t.getAttribute("aria-controls"));
-          return !cap.hidden && t.getAttribute("aria-expanded") === "true";
-        });
-        check("Keyboard focus reveals the evidence capsule", shown);
-        await page.screenshot({ path: `${OUT}/5-capsule-focus.png` });
-        await page.keyboard.press("Escape");
-        check("Escape dismisses the capsule", await page.evaluate(() => document.querySelector(".term[aria-expanded=true]") === null));
-      }
-      if (info.slug) {
-        reachedCase = true;
-        check("Focus ring is visible on View case", info.outline !== "none", info.outline);
-        await page.keyboard.press("Enter");
-        await page.waitForSelector('[role="dialog"]');
-        await sleep(200);
-        check("Enter opens case from keyboard", (await page.locator("#case-title").count()) === 1);
-        await page.keyboard.press("Escape");
-        await sleep(300);
-        check("Keyboard focus restored after Escape", await page.evaluate(() => !!document.activeElement?.getAttribute("data-case-link")));
-      }
-    }
-    check("Tab order reaches About terms and a View case link", reachedTerm && reachedCase);
-    await page.locator(".term").first().scrollIntoViewIfNeeded();
-    await page.locator(".term").first().click();
-    check("Term toggles as a labelled disclosure on click", (await page.locator(".term").first().getAttribute("aria-expanded")) === "true");
-    await page.mouse.click(5, 450);
-    await sleep(200);
-    check("Outside click dismisses the capsule", (await page.locator(".term").first().getAttribute("aria-expanded")) === "false");
-    await ctx.close();
-  }
-
-  {
-    const { ctx, page } = await newPage({ reducedMotion: "reduce" });
-    await page.goto(BASE);
-    await loaded(page);
-    await sleep(1500);
-    const cls = await html(page);
-    check("System reduced motion honoured", cls.includes("reduce") && !cls.includes(" gl") && !cls.includes("cursor"), cls);
-    const hero = await page.evaluate(() => ({ pos: getComputedStyle(document.querySelector(".hero-sticky")).position, track: document.getElementById("top").offsetHeight, content: document.querySelector(".hero-sticky").offsetHeight }));
-    check("Reduced: static hero, no scroll-driven track", hero.pos === "relative" && hero.track === hero.content, JSON.stringify(hero));
-    check("Reduced: introduction visible immediately", await page.evaluate(() => getComputedStyle(document.querySelector(".hero-intro")).opacity === "1"));
-    await page.evaluate(() => document.getElementById("work").scrollIntoView());
-    await sleep(200);
-    check("Reduced: cards stable and visible", await page.evaluate(() => Array.from(document.querySelectorAll(".card-caption, .poster")).every((e) => getComputedStyle(e).opacity === "1")));
-    check("Reduced: no pause buttons on static previews", (await page.locator(".poster-pause").count()) === 0);
-    await page.evaluate(() => scrollTo(0, 0));
-    await page.screenshot({ path: `${OUT}/5-reduced-hero.png` });
-    await ctx.close();
-  }
-
-  {
-    const { ctx, page } = await newPage();
-    await page.goto(BASE);
-    await loaded(page);
-    await sleep(1000);
-    await page.click("#site-nav .motion-toggle");
-    await sleep(500);
-    check("Reduce motion toggle disables the scene", (await html(page)).includes("reduce") && !(await html(page)).includes(" gl"));
-    await page.reload();
-    await loaded(page);
-    await sleep(800);
-    check("Reduce motion setting persists", (await html(page)).includes("reduce") && (await page.locator("#site-nav .motion-toggle").getAttribute("aria-pressed")) === "true");
-    await page.click("#site-nav .motion-toggle");
-    await sleep(1500);
-    check("Turning motion back on restarts the scene", (await html(page)).includes(" gl") && (await html(page)).includes("motion"));
-    check("Sound preference untouched by motion setting", (await page.evaluate(() => localStorage.getItem("ab.sound"))) === null);
-    await ctx.close();
-  }
-
-  {
-    const { ctx, page } = await newPage();
-    await page.goto(`${BASE}/?gl=0`);
-    await loaded(page);
-    await sleep(800);
-    check("Forced fallback: no WebGL", !(await html(page)).includes(" gl"));
-    check("Fallback posters visible", await page.evaluate(() => Array.from(document.querySelectorAll(".poster-canvas")).every((c) => getComputedStyle(c).opacity === "1")));
-    await page.evaluate(() => scrollTo(0, 0));
-    await page.screenshot({ path: `${OUT}/5-fallback-hero.png` });
-    let opened = 0;
-    for (const slug of SLUGS) {
-      const l = page.locator(`[data-case-link="${slug}"]`);
-      await l.scrollIntoViewIfNeeded();
-      await l.click();
-      await page.waitForSelector("#case-title", { timeout: 3000 }).catch(() => {});
-      if (new URL(page.url()).pathname === `/work/${slug}`) opened++;
-      await page.keyboard.press("Escape");
-      await sleep(250);
-    }
-    check("Fallback visitor reaches all four case studies", opened === 4, `${opened}/4`);
-    await page.evaluate(() => document.getElementById("work").scrollIntoView());
-    await sleep(900);
-    await page.screenshot({ path: `${OUT}/5-fallback-work.png` });
     await ctx.close();
   }
 
   /* ------------------------------------------------------------------ 6 */
-  journey("6. Content, links, résumé, clipboard");
+  journey("6. Keyboard, reduced motion, no JavaScript");
+  {
+    const { ctx, page } = await newPage();
+    await page.goto(BASE);
+    await ready(page);
+    await page.keyboard.press("Tab");
+    check("First Tab reaches the skip link", (await page.evaluate(() => document.activeElement?.className)) === "skip-link");
+    await page.keyboard.press("Enter");
+    check("Skip link moves focus to main", (await page.evaluate(() => document.activeElement?.id)) === "main");
+    let reachedCase = false;
+    for (let i = 0; i < 40 && !reachedCase; i++) {
+      await page.keyboard.press("Tab");
+      const info = await page.evaluate(() => ({ slug: document.activeElement?.getAttribute("data-case-link"), outline: getComputedStyle(document.activeElement).outlineStyle }));
+      if (info.slug) {
+        reachedCase = true;
+        check("Focus ring is visible on links", info.outline !== "none", info.outline);
+        await page.keyboard.press("Enter");
+        await page.waitForSelector('[role="dialog"]');
+        await sleep(700);
+        await page.keyboard.press("Escape");
+        await sleep(900);
+        check("Keyboard: open and close a case, focus restored", await page.evaluate(() => !!document.activeElement?.getAttribute("data-case-link")));
+      }
+    }
+    check("Tab order reaches a case link", reachedCase);
+    await page.locator(".term").first().focus();
+    check("Keyboard focus reveals the evidence capsule", await page.evaluate(() => {
+      const t = document.querySelector(".term");
+      return t.getAttribute("aria-expanded") === "true" && !document.getElementById(t.getAttribute("aria-controls")).hidden;
+    }));
+    await page.keyboard.press("Escape");
+    check("Escape dismisses the capsule", (await page.locator('.term[aria-expanded="true"]').count()) === 0);
+    await page.locator(".skill-evidence summary").first().focus();
+    await page.keyboard.press("Enter");
+    check("Skill evidence expands from the keyboard", (await page.locator(".skill-evidence").first().getAttribute("open")) !== null);
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await newPage({ reducedMotion: "reduce" });
+    await page.goto(BASE);
+    await ready(page);
+    await sleep(300);
+    const cls = await html(page);
+    check("System reduced motion honoured", cls.includes("reduce") && !cls.includes("has-cursor"), cls);
+    check("Reduced: headline complete immediately", await page.evaluate(() => Array.from(document.querySelectorAll(".lt-inner")).every((e) => getComputedStyle(e).transform === "none")));
+    await page.evaluate(() => document.getElementById("work").scrollIntoView());
+    await sleep(200);
+    check("Reduced: exhibits and text fully visible", await page.evaluate(() => Array.from(document.querySelectorAll(".stage")).every((s) => ["none", "inset(0px)"].includes(getComputedStyle(s).clipPath)) && Array.from(document.querySelectorAll("[data-reveal=fade]")).every((e) => getComputedStyle(e).opacity === "1")));
+    const maps = exhibit(page, "jec-maps");
+    await maps.getByRole("button", { name: "Library" }).click();
+    await sleep(150);
+    const dot = await maps.locator(".maps-traveller").evaluate((c) => [Number(c.getAttribute("cx")), Number(c.getAttribute("cy"))]);
+    check("Reduced: demo shows the result without animating", Math.abs(dot[0] - 64) < 0.5 && Math.abs(dot[1] - 14) < 0.5);
+    await page.screenshot({ path: `${OUT}/6-reduced.png` });
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await newPage();
+    await page.goto(BASE);
+    await ready(page);
+    await page.locator(".site-footer .motion-toggle").scrollIntoViewIfNeeded();
+    await page.click(".site-footer .motion-toggle");
+    check("Reduce motion control applies at once", (await html(page)).includes("reduce"));
+    await page.reload();
+    await ready(page);
+    check("Reduce motion setting persists", (await html(page)).includes("reduce") && (await page.locator(".site-footer .motion-toggle").getAttribute("aria-pressed")) === "true");
+    await page.click(".site-footer .motion-toggle");
+    check("Motion can be turned back on", (await html(page)).includes("motion"));
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await newPage({ javaScriptEnabled: false }, { trackErrors: false });
+    await page.goto(BASE);
+    const vis = await page.evaluate(() => ({
+      h1: document.querySelector("#hero-title .lt").getBoundingClientRect().height > 100,
+      sections: ["work", "about", "skills", "experience", "leadership", "education", "contact"].every((id) => document.getElementById(id)),
+      fades: Array.from(document.querySelectorAll("[data-reveal]")).every((e) => getComputedStyle(e).opacity === "1"),
+      stages: document.querySelectorAll(".stage .lab").length,
+    }));
+    check("Without JavaScript: headline, sections and demo initial states render", vis.h1 && vis.sections && vis.fades && vis.stages === 4, JSON.stringify(vis));
+    await page.screenshot({ path: `${OUT}/6-no-js.png` });
+    await ctx.close();
+  }
+
+  /* ------------------------------------------------------------------ 7 */
+  journey("7. Sound (state checks, not a listening test)");
+  {
+    const { ctx, page } = await newPage();
+    await page.goto(BASE);
+    await ready(page);
+    await page.mouse.move(100, 400);
+    await page.mouse.move(1200, 500, { steps: 10 });
+    await page.mouse.wheel(0, 900);
+    await sleep(300);
+    check("Off by default: moving and scrolling create no audio", (await audio(page)).state === "none");
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.click(".header-tools .sound-toggle");
+    await page.waitForFunction(() => window.__abAudio?.().state === "running", null, { timeout: 4000 }).catch(() => {});
+    await sleep(300);
+    check("Sound turns on after an explicit click", (await audio(page)).state === "running" && (await page.locator(".header-tools .sound-toggle").innerText()).toLowerCase().includes("sound on"));
+    await sleep(800);
+    await page.mouse.move(200, 600);
+    await page.mouse.move(1300, 300, { steps: 12 });
+    await page.mouse.wheel(0, 1500);
+    await sleep(200);
+    check("No sound on pointer movement or scrolling", (await audio(page)).voices === 0);
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.click('#site-nav a[href="#about"]');
+    await sleep(40);
+    check("Navigation plays a short cue", (await audio(page)).voices > 0);
+    await sleep(600);
+    const v = [];
+    for (let i = 0; i < 12; i++) {
+      await page.click('#site-nav a[href="#skills"]');
+      v.push((await audio(page)).voices);
+    }
+    check("Rapid clicks never pile up voices", Math.max(...v) <= 4, `max ${Math.max(...v)}`);
+    await page.click(".header-tools .sound-toggle");
+    await sleep(400);
+    check("Sound off suspends audio", (await audio(page)).state === "suspended" && (await page.evaluate(() => localStorage.getItem("ab.sound"))) === "off");
+    await page.click(".header-tools .sound-toggle");
+    await sleep(500);
+    await page.reload();
+    await ready(page);
+    check("Remembered sound waits for a gesture", (await page.locator(".header-tools .sound-toggle").innerText()).toLowerCase().includes("resume") && (await audio(page)).state === "none");
+    await page.mouse.click(700, 500);
+    await sleep(1200);
+    check("First gesture resumes remembered sound", (await audio(page)).state === "running");
+    await ctx.close();
+  }
+
+  /* ------------------------------------------------------------------ 8 */
+  journey("8. Content, links, résumé, clipboard");
   {
     const home = await (await fetch(BASE)).text();
     const text = home.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#x27;|&#39;/g, "'").replace(/\s+/g, " ");
-    for (const s of ["JEC Maps / JECVERSE", "M-PHISH", "Tender AI", "Plugora"]) check(`Project present: ${s}`, text.includes(s));
-    check("Exactly four project cards", (home.match(/<article/g) ?? []).length === 4);
-    check("Internship dates Jul–Aug 2026", text.includes("Software Development Intern") && text.includes("Frint.in") && text.includes("Jul–Aug 2026"));
+    for (const s of ["JEC Maps", "M-PHISH", "Tender AI", "Plugora"]) check(`Project present: ${s}`, text.includes(s));
+    check("Exactly four project exhibits", (home.match(/<article class="exhibit /g) ?? []).length === 4);
+    check("Internship: Frint.in, Jul–Aug 2026", text.includes("Software Development Intern") && text.includes("Frint.in") && text.includes("Jul–Aug 2026"));
     check("Both schools", text.includes("Jorhat Engineering College") && text.includes("Sai Vikash Vidya Niketan") && text.includes("2021–2023"));
-    check("Leadership roles", ["GDG on Campus JEC", "General Sports Secretary", "2026–2027", "IIT Guwahati Spirit", "Club Advisor", "GLUG-JEC"].every((s) => text.includes(s)));
+    check("Leadership: GDG on Campus JEC, JEC Students’ Union, GLUG-JEC", ["GDG on Campus JEC", "General Sports Secretary", "JEC Students’ Union", "2026–2027", "IIT Guwahati Spirit", "Club Advisor", "GLUG-JEC"].every((s) => text.includes(s)));
+    check("Undated roles are labelled, not given invented dates", (home.match(/class="index-date mono">Dates not listed</g) ?? []).length === 2);
     check("Contact address and mailto", text.includes(CONTACT) && home.includes(`href="mailto:${CONTACT}"`));
-    check("No invented metrics or testimonials", !/testimonial|accuracy|users served|downloads|award/i.test(text));
+    check("Demos are labelled as demonstrations or simulations", ["Demonstration geometry", "This is not the M-PHISH engine", "not output from Tender AI", "Nothing is reserved"].every((s) => text.includes(s)));
+    check("No invented metrics or testimonials", !/testimonial|accuracy|users served|downloads|award|revenue|customers/i.test(text));
     const hrefs = new Set();
     for (const p of ["/", ...SLUGS.map((s) => `/work/${s}`)]) {
       const h = await (await fetch(BASE + p)).text();
@@ -671,21 +547,19 @@ try {
     }
     const r = await fetch(`${BASE}/resume`);
     const rt = await r.text();
-    check("Printable résumé view serves", r.status === 200 && rt.includes("Asimangkan Boro") && rt.includes(CONTACT) && rt.includes("Print or save as PDF"));
-    check("No invented résumé PDF URL", !/\.pdf"/i.test(home));
+    check("Printable résumé serves", r.status === 200 && rt.includes("Asimangkan Boro") && rt.includes(CONTACT) && rt.includes("Print or save as PDF"));
     for (const p of ["/icon.svg", "/opengraph-image"]) check(`Asset serves: ${p}`, (await fetch(BASE + p)).status === 200);
-    check("Home has title and description", /<title>Asimangkan Boro · Software developer from Assam<\/title>/.test(home) && /<meta name="description"/.test(home));
-    check("Per-case metadata", (await (await fetch(`${BASE}/work/m-phish`)).text()).includes('<meta name="description" content="M-PHISH:'));
+    check("Home title and description", /<title>Asimangkan Boro · Software developer from Assam<\/title>/.test(home) && /<meta name="description"/.test(home));
 
     const ok = await newPage();
     await ok.ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin: BASE });
     await ok.page.goto(`${BASE}/#contact`);
-    await loaded(ok.page);
+    await ready(ok.page);
     await ok.page.click(".copy-row button");
     await sleep(300);
     const status = await ok.page.locator(".copy-status").innerText();
     const clip = await ok.page.evaluate(() => navigator.clipboard.readText());
-    check("Copy succeeds and is announced politely", status.includes("Email copied") && clip === CONTACT && (await ok.page.locator(".copy-status").getAttribute("aria-live")) === "polite", status);
+    check("Copy succeeds with visible, announced feedback", status.includes("Email copied") && clip === CONTACT && (await ok.page.locator(".copy-status").getAttribute("aria-live")) === "polite", status);
     await ok.ctx.close();
     const bad = await newPage();
     await bad.ctx.addInitScript(() => {
@@ -693,7 +567,7 @@ try {
       document.execCommand = () => false;
     });
     await bad.page.goto(`${BASE}/#contact`);
-    await loaded(bad.page);
+    await ready(bad.page);
     await bad.page.click(".copy-row button");
     await sleep(300);
     const fail = await bad.page.locator(".copy-status").innerText();
@@ -701,8 +575,8 @@ try {
     await bad.ctx.close();
   }
 
-  journey("7. Console");
-  check("No page errors or console errors during the run", consoleErrors.length === 0, consoleErrors.slice(0, 8).join(" || "));
+  journey("9. Console");
+  check("No page errors, hydration errors or console errors", consoleErrors.length === 0, consoleErrors.slice(0, 8).join(" || "));
 } catch (err) {
   check("Suite completed without crashing", false, err.stack ?? err);
 } finally {

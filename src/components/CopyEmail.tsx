@@ -34,13 +34,13 @@ export function CopyEmail({ email }: { email: string }) {
       }
     }
     setStatus(ok ? "ok" : "fail");
-    if (ok) sfx("confirm");
+    if (ok) sfx("success");
     timer.current = window.setTimeout(() => setStatus(""), 4000);
   };
   return (
     <div className="copy-row">
-      <button type="button" className="pill" data-magnetic onClick={copy}>
-        <span className="mag">Copy email</span>
+      <button type="button" className="btn btn-line" onClick={copy} data-cursor="Copy">
+        Copy email
       </button>
       <p className="copy-status" role="status" aria-live="polite" data-state={status}>
         {status === "ok" ? "Email copied to clipboard." : status === "fail" ? `Couldn’t copy. Select the address above: ${email}` : ""}

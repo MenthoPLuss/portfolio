@@ -30,7 +30,7 @@ export function MenuToggle() {
   return (
     <button
       type="button"
-      className="pill menu-btn"
+      className="btn btn-line menu-btn"
       aria-expanded={open}
       aria-controls="site-nav"
       onClick={() => ui.set({ menuOpen: !open })}

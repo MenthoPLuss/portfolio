@@ -1,6 +1,6 @@
-# Asimangkan Boro · portfolio
+# Asimangkan Boro · The Living Editorial
 
-A cinematic, responsive personal portfolio built with Next.js (App Router), TypeScript, CSS variables, one Three.js WebGL scene and the Web Audio API. Every mark, preview, landscape and sound is original and generated in code.
+A personal portfolio built as a digital magazine that behaves like a small software lab. Editorial typography sets the tone. Four working demos show the projects. Next.js App Router, React and TypeScript, with no WebGL and no runtime dependencies beyond Next, React and the Geist fonts.
 
 ## Run it
 
@@ -9,11 +9,12 @@ Requires Node.js 20 or newer.
 ```bash
 npm install
 npm run dev                         # http://localhost:3000
+npm run typecheck
 npm run build                       # production build
 npm run start                       # serve the build on :3000
 ```
 
-Set `SITE_URL` when building for a real domain so canonical and social-preview URLs are absolute and correct:
+Set `SITE_URL` when building for a real domain so canonical and social-preview URLs are absolute:
 
 ```bash
 SITE_URL=https://your-domain.example npm run build
@@ -23,21 +24,44 @@ No secrets or API keys are needed.
 
 ## Edit content
 
-All text, projects, roles, skills, links and overview captions live in one file:
+Text, projects, roles, skills, links and credits live in one file:
 
 ```
 src/content/portfolio.ts
 ```
 
-Presentation lives in `src/components`, styling in `src/app/globals.css`.
+`editorial` in that file holds the creative copy, such as the headline and statements. Everything else is factual and verified. The sample data used by the demos lives in `src/features/lab/data/` and is labelled as illustrative in the interface.
 
 ### Résumé
 
-No original PDF was supplied, so the site links to a printable HTML résumé at `/resume`, generated from the same content file. To use the original PDF, copy it to `public/resume.pdf` and set `person.resume` to `{ href: "/resume.pdf", label: "Résumé PDF", isPdf: true }`. The phone number from the PDF is intentionally not published on the site.
+No original PDF was supplied, so the site links to a printable HTML résumé at `/resume`, generated from the content file. To use the original PDF, copy it to `public/resume.pdf` and set `person.resume` to `{ href: "/resume.pdf", label: "Résumé PDF", isPdf: true }`.
+
+## How it fits together
+
+| Area | Where |
+| --- | --- |
+| Page composition (server-rendered) | `src/components/Site.tsx` |
+| Living Type headline | `src/components/editorial/LivingType.tsx` |
+| Navigation and active-section indicator | `src/components/editorial/Nav.tsx` |
+| Interactive lab (one lazy chunk per demo) | `src/features/lab/` |
+| Case-study routing, history, focus and view transitions | `src/lib/cases.ts`, `src/components/CaseLayer.tsx` |
+| Motion preference, reveals, header state, sound bridge | `src/components/PageSystems.tsx` |
+| On-demand animation frames | `src/lib/motion/frame.ts` |
+| Optional interface sound cues | `src/lib/audio/cues.ts` |
+| Identity geometry | `src/lib/mark.ts`, `src/components/Marks.tsx` |
+| Design system | `src/app/globals.css`, `src/features/lab/lab.css` |
+
+Design rules the code follows:
+
+- **The first paint is the real page.** There is no loader, and the headline reveal is pure CSS. All text, links and the initial state of every demo are server-rendered and readable without JavaScript.
+- **Nothing animates while idle.** Animation frames run only while something is moving, such as a route being drawn, the headline easing back or the cursor label catching up. The acceptance suite measures this.
+- **Demos tell the truth.** The JEC Maps demo computes real shortest paths over labelled demonstration geometry. The M-PHISH demo runs a few teaching rules on synthetic messages, and says it is not the M-PHISH engine. The Tender AI demo shows prewritten sample fields from fictional tenders. The Plugora demo is a booking simulation that reserves nothing.
+- **Shared-element transitions** use the View Transitions API where available. Elsewhere the case study simply opens.
+- **Sound is off by default** and limited to four short interface cues. Nothing plays on pointer movement or scrolling.
 
 ## Acceptance tests
 
-The suite drives the production build in headless Microsoft Edge through `playwright-core` (no browser download).
+The suite drives the production build in headless Microsoft Edge through `playwright-core`, so no browser download is needed.
 
 ```bash
 npm run build
@@ -45,27 +69,6 @@ npm run start -- -p 3100            # in one terminal
 npm run test:acceptance             # in another; BASE_URL defaults to http://localhost:3100
 ```
 
-Use `BROWSER_CHANNEL=chrome` to run with Google Chrome instead. Screenshots and `report.json` are written to `test-results/`. Sound checks read Web Audio node values. They confirm routing, gain and timing, not how the mix sounds.
+Use `BROWSER_CHANNEL=chrome` to run with Google Chrome. Screenshots and `report.json` are written to `test-results/`.
 
-Useful manual switches:
-
-- `/?gl=0` forces the static, non-WebGL fallback.
-- The Reduce motion button in the header persists the visitor's choice, separately from sound.
-- `/work/<slug>` opens a case study directly, for example `/work/jec-maps`.
-
-## How it fits together
-
-| Area | Where |
-| --- | --- |
-| Single animation clock | `src/lib/ticker.ts` |
-| Scroll, pointer, hero descent, active section | `src/components/MotionSystem.tsx` |
-| WebGL terrain, monogram glow, bending gallery planes | `src/lib/scene/scene.ts` |
-| Project preview illustrations (canvas) | `src/lib/previews.ts` |
-| AB monogram and project mark geometry | `src/lib/mark.ts` |
-| Adaptive score and interface sound | `src/lib/audio/engine.ts`, `src/lib/audio/sound.ts` |
-| Case-study routing, history, focus and scroll restoration | `src/lib/cases.ts`, `src/components/CaseLayer.tsx` |
-| Overview player | `src/components/OverviewPlayer.tsx` |
-
-Headings, navigation, project links, the direct case pages and contact are server-rendered. The renderer, audio engine and previews load in the browser after the text.
-
-Asset credits are listed in `CREDITS.md`.
+Asset credits are in `CREDITS.md`.

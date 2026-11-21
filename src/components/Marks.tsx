@@ -1,4 +1,4 @@
-import { ICON_PATHS, MARK_PATHS, MARK_STROKE } from "@/lib/mark";
+import { ICON_PATHS, MARK_PATHS, MARK_PATHS_SMALL, MARK_STROKE, MARK_STROKE_SMALL } from "@/lib/mark";
 
 /** Decorative AB monogram. Hidden from assistive technology; pair with visible text. */
 export function Monogram({ className, stroke = MARK_STROKE, title }: { className?: string; stroke?: number; title?: string }) {
@@ -45,5 +45,22 @@ export function ProjectIcon({ name, className }: { name: string; className?: str
         <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={r} />
       ))}
     </svg>
+  );
+}
+
+/**
+ * The identity tile: the AB monogram in ink on a signal-lime square.
+ * Small sizes use the simplified geometry that stays legible at 16-24px.
+ */
+export function MarkTile({ large = false }: { large?: boolean }) {
+  const paths = large ? MARK_PATHS : MARK_PATHS_SMALL;
+  return (
+    <span className={`mark-tile${large ? " mark-tile-lg" : ""}`} aria-hidden="true">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth={large ? 1.7 : MARK_STROKE_SMALL - 0.4} strokeLinecap="round" strokeLinejoin="round" focusable="false">
+        {paths.map((d) => (
+          <path key={d} d={d} />
+        ))}
+      </svg>
+    </span>
   );
 }

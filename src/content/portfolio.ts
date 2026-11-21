@@ -1,11 +1,12 @@
 /**
  * The single content file for the portfolio.
- * Edit text, projects, roles and links here. Presentation lives in src/components.
+ * Edit text, projects, roles and links here. Presentation lives in src/components and src/features.
  *
  * Rules kept by this ledger:
  * - Only verified facts. Unsupported case fields are left out rather than invented.
- * - Illustrations are labelled as illustrations or concepts.
- * - External links were checked on 19 November 2026.
+ * - Interactive demos are labelled as demonstrations, concepts or simulations.
+ * - `editorial` holds creative copy (headlines and statements). It is voice, not biography.
+ * - External links were checked on 19 and 20 November 2026.
  */
 
 export type ProjectSlug = "jec-maps" | "m-phish" | "tender-ai" | "plugora";
@@ -24,13 +25,15 @@ export interface CaseSection {
 
 export interface Project {
   slug: ProjectSlug;
+  number: string;
   title: string;
   icon: ProjectIconName;
   status: string;
   summary: string;
-  /** Label shown on the preview media so illustrations are never mistaken for captures. */
-  mediaLabel: string;
-  mediaDescription: string;
+  /** Short labels shown on the exhibit. Only technologies confirmed in the project's own repository. */
+  tech: string[];
+  /** What the interactive exhibit is, stated plainly so it is never mistaken for the product. */
+  demo: { kind: string; note: string };
   stack?: string[];
   stackNote?: string;
   sections: CaseSection[];
@@ -40,6 +43,7 @@ export interface Project {
 }
 
 export interface Role {
+  id: string;
   title: string;
   org: string;
   dates?: string;
@@ -50,12 +54,13 @@ export interface Role {
 export interface SkillGroup {
   name: string;
   items: string[];
-  evidence: { label: string; href: string }[];
+  evidence: { label: string; href: string; why: string }[];
 }
 
 export const person = {
   name: "Asimangkan Boro",
   firstName: "Asimangkan",
+  role: "Software developer",
   headline: "Software developer from Assam.",
   supporting:
     "Final-year CSE student at Jorhat Engineering College. I build software and help run the communities I’m part of.",
@@ -63,10 +68,24 @@ export const person = {
     "I’m Asimangkan, a computer science student from Guwahati. At JEC, I’ve worked on campus navigation, explored ideas for EV charging, and helped organize student developer and sports teams. During my internship at Frint.in, I worked with a team on Tender AI.",
   location: "Guwahati, Assam, India",
   email: "asimangkan9@gmail.com",
+  /** Confirmed by the owner on 20 November 2026 as the account the portfolio is published from. */
+  github: { label: "GitHub", handle: "MenthoPLuss", href: "https://github.com/MenthoPLuss" },
   /** No original PDF was supplied, so the printable HTML résumé is used. */
   resume: { href: "/resume", label: "View résumé", isPdf: false },
   siteDescription:
     "Asimangkan Boro is a final-year Computer Science and Engineering student at Jorhat Engineering College, Assam. Projects, skills, experience and contact.",
+};
+
+/** Creative copy for the editorial layout. */
+export const editorial = {
+  heroLines: ["Making digital", "things feel"],
+  heroAccentWord: "human",
+  heroText: "Software developer from Assam. Building useful software, exploring ideas, and bringing people together.",
+  heroMeta: ["Portfolio", "Edition 2026", "Assam, India"],
+  aboutStatement: ["Code is what I build with.", "Curiosity is why I build."],
+  intersection: ["Software development", "Campus projects", "Technical experimentation", "Student communities", "Event organization", "Leadership"],
+  contactStatement: "Have something worth building?",
+  contactLine: "Let’s talk about it.",
 };
 
 export interface EvidenceTerm {
@@ -85,7 +104,7 @@ export const about: { heading: string; paragraphs: AboutSegment[][] } = {
   paragraphs: [
     [
       "Most of my time at JEC goes into two things: building software and running things with other people. On the software side I work on ",
-      { id: "nav", text: "campus navigation", capsule: "JEC Maps, an interactive campus map and navigation project for JEC.", icon: "route", href: "/work/jec-maps", linkLabel: "View case: JEC Maps" },
+      { id: "nav", text: "campus navigation", capsule: "JEC Maps, an interactive campus map and navigation project for JEC.", icon: "route", href: "/work/jec-maps", linkLabel: "Open case: JEC Maps" },
       ", and with a team I’ve built a phishing-detection prototype for our final-year project.",
     ],
     [
@@ -101,12 +120,16 @@ export const about: { heading: string; paragraphs: AboutSegment[][] } = {
 export const projects: Project[] = [
   {
     slug: "jec-maps",
-    title: "JEC Maps / JECVERSE",
+    number: "01",
+    title: "JEC Maps",
     icon: "route",
     status: "Campus navigation project",
-    summary: "An interactive campus map and navigation system for Jorhat Engineering College, and the start of a longer plan for a 3D campus twin.",
-    mediaLabel: "Concept illustration",
-    mediaDescription: "Illustration of a route drawing across a stylised campus map. Not real geodata.",
+    summary: "An interactive campus map and navigation system for Jorhat Engineering College, and the start of a longer plan for a 3D campus twin called JECVERSE.",
+    tech: ["Next.js", "React", "TypeScript", "Tailwind CSS", "MapLibre GL"],
+    demo: {
+      kind: "Route-finding demo",
+      note: "Demonstration geometry. Places and paths are illustrative, not JEC’s real layout. Routes are computed in your browser.",
+    },
     stack: ["Next.js", "React", "TypeScript", "Tailwind CSS", "MapLibre GL"],
     stackNote: "From the project’s package.json.",
     sections: [
@@ -134,7 +157,7 @@ export const projects: Project[] = [
       },
       {
         heading: "Current state",
-        body: ["Current work is the interactive campus map and navigation interface. The preview on this page is a concept illustration, not a capture of the app."],
+        body: ["Current work is the interactive campus map and navigation interface. The demo on this page uses demonstration geometry, not the app’s map data."],
       },
       {
         heading: "Next step",
@@ -146,12 +169,16 @@ export const projects: Project[] = [
   },
   {
     slug: "m-phish",
+    number: "02",
     title: "M-PHISH",
     icon: "shield",
     status: "Final-year project prototype · v0.1.0",
     summary: "A contextual phishing and web-trust prototype that explains why a website may be risky before you trust it.",
-    mediaLabel: "Illustrative example",
-    mediaDescription: "Synthetic example message with an explanatory inspection panel. The message and addresses are made up and contain no real links.",
+    tech: ["FastAPI", "Python", "Next.js", "Chromium extension", "SQLite"],
+    demo: {
+      kind: "Message inspection demo",
+      note: "Synthetic messages on reserved example domains. A few simple rules run in your browser to explain the idea. This is not the M-PHISH engine.",
+    },
     stack: ["FastAPI", "Python", "Next.js", "TypeScript", "Chromium extension (Manifest V3)", "SQLite"],
     stackNote: "From the project README. Version from its 0.1.0 changelog.",
     sections: [
@@ -188,12 +215,16 @@ export const projects: Project[] = [
   },
   {
     slug: "tender-ai",
+    number: "03",
     title: "Tender AI",
     icon: "pages",
     status: "Team internship project · Frint.in · Jul–Aug 2026",
     summary: "A tender discovery and document-intelligence platform for Indian public procurement, built by an internship team.",
-    mediaLabel: "Illustration",
-    mediaDescription: "Neutral illustration of tender documents being read and highlighted. Not a capture of the product.",
+    tech: ["Node.js", "Express", "React", "Vite", "FastAPI"],
+    demo: {
+      kind: "Document extraction preview",
+      note: "Fictional tenders. The extracted fields are prewritten sample data that illustrate the interface. They are not output from Tender AI.",
+    },
     stack: ["Node.js", "Express", "React", "Vite", "Python", "FastAPI"],
     stackNote: "From the team repository README.",
     sections: [
@@ -230,12 +261,16 @@ export const projects: Project[] = [
   },
   {
     slug: "plugora",
+    number: "04",
     title: "Plugora",
     icon: "plug",
     status: "Product concept",
     summary: "A peer-to-peer concept for sharing home EV chargers with nearby drivers.",
-    mediaLabel: "Concept preview",
-    mediaDescription: "Concept illustration of a sample charger card and a sample booking flow on a small map. Sample data only.",
+    tech: ["Product concept", "Booking flow", "Map interface"],
+    demo: {
+      kind: "Booking concept simulation",
+      note: "Concept simulation with sample chargers. Nothing is reserved, no payment is taken and availability is not live.",
+    },
     sections: [
       {
         heading: "Overview",
@@ -251,7 +286,7 @@ export const projects: Project[] = [
       },
       {
         heading: "Current state",
-        body: ["Concept. Listing and booking are proposed flows, not a working product. The preview is an illustration with sample data."],
+        body: ["Concept. Listing and booking are proposed flows, not a working product. The demo on this page is a simulation with sample data."],
       },
     ],
     links: [],
@@ -261,62 +296,69 @@ export const projects: Project[] = [
 
 export const skills: SkillGroup[] = [
   {
-    name: "Development",
-    items: ["React", "Next.js", "TypeScript", "Tailwind CSS"],
-    evidence: [{ label: "JEC Maps", href: "/work/jec-maps" }],
+    name: "Frontend engineering",
+    items: ["React", "TypeScript", "Tailwind CSS"],
+    evidence: [{ label: "JEC Maps", href: "/work/jec-maps", why: "The campus map interface is a React and TypeScript app styled with Tailwind CSS." }],
   },
   {
-    name: "Maps",
+    name: "Frameworks and app architecture",
+    items: ["Next.js App Router"],
+    evidence: [
+      { label: "JEC Maps", href: "/work/jec-maps", why: "Built as a Next.js application." },
+      { label: "This portfolio", href: "#credits", why: "Built with Next.js App Router and TypeScript." },
+    ],
+  },
+  {
+    name: "Maps and spatial interfaces",
     items: ["MapLibre GL", "Campus-navigation interface work"],
-    evidence: [{ label: "JEC Maps", href: "/work/jec-maps" }],
+    evidence: [{ label: "JEC Maps", href: "/work/jec-maps", why: "MapLibre GL renders the interactive campus map." }],
   },
   {
-    name: "Coordination",
+    name: "Coordination and leadership",
     items: ["Recruitment", "Participant communication", "Follow-ups", "Team leadership", "Event logistics", "Registration", "Deadline tracking"],
     evidence: [
-      { label: "GDG on Campus JEC", href: "#role-gdg" },
-      { label: "Sports Secretary", href: "#role-sports" },
+      { label: "GDG on Campus JEC", href: "#role-gdg", why: "Recruitment, candidate communications, interviews and event planning." },
+      { label: "General Sports Secretary", href: "#role-sports", why: "Registrations, documentation, accommodation and communication for intercollegiate sports." },
     ],
   },
   {
     name: "Tools",
     items: ["Google Forms", "Online meeting coordination"],
-    evidence: [{ label: "GDG on Campus JEC", href: "#role-gdg" }],
+    evidence: [{ label: "GDG on Campus JEC", href: "#role-gdg", why: "Used for recruitment and online interviews." }],
   },
 ];
 
-export const experience: { dated: (Role & { id: string })[]; community: (Role & { id: string })[] } = {
-  dated: [
-    {
-      id: "role-frint",
-      title: "Software Development Intern",
-      org: "Frint.in",
-      dates: "Jul–Aug 2026",
-      detail: "Worked on Tender AI as part of the internship project team.",
-      evidence: { label: "Tender AI case", href: "/work/tender-ai" },
-    },
-    {
-      id: "role-sports",
-      title: "General Sports Secretary",
-      org: "JEC Students’ Union",
-      dates: "2026–2027",
-      detail: "Coordinates registrations, documentation, accommodation and communication for intercollegiate sports, including IIT Guwahati Spirit.",
-    },
-  ],
-  community: [
-    {
-      id: "role-gdg",
-      title: "Organizer",
-      org: "GDG on Campus JEC",
-      detail: "Coordinates recruitment, candidate communications, online interviews and campus-event planning with faculty advisors and student leads across technical, development, design and management teams.",
-    },
-    {
-      id: "role-glug",
-      title: "Club Advisor",
-      org: "GLUG-JEC",
-    },
-  ],
-};
+export const experience: Role[] = [
+  {
+    id: "role-frint",
+    title: "Software Development Intern",
+    org: "Frint.in",
+    dates: "Jul–Aug 2026",
+    detail: "Worked on Tender AI as part of the internship project team.",
+    evidence: { label: "Tender AI case", href: "/work/tender-ai" },
+  },
+];
+
+export const leadership: Role[] = [
+  {
+    id: "role-gdg",
+    title: "Organizer",
+    org: "GDG on Campus JEC",
+    detail: "Coordinates recruitment, candidate communications, online interviews and campus-event planning with faculty advisors and student leads across technical, development, design and management teams.",
+  },
+  {
+    id: "role-sports",
+    title: "General Sports Secretary",
+    org: "JEC Students’ Union",
+    dates: "2026–2027",
+    detail: "Coordinates registrations, documentation, accommodation and communication for intercollegiate sports, including IIT Guwahati Spirit.",
+  },
+  {
+    id: "role-glug",
+    title: "Club Advisor",
+    org: "GLUG-JEC",
+  },
+];
 
 export const education = [
   {
@@ -331,26 +373,12 @@ export const education = [
   },
 ];
 
-/** Timed overview beats in seconds. Captions double as the accessible transcript. */
-export const overviewBeats: { start: number; end: number; scene: "mark" | ProjectSlug | "contact"; caption: string }[] = [
-  { start: 0, end: 3, scene: "mark", caption: "Asimangkan Boro. Software developer from Assam." },
-  { start: 3, end: 8, scene: "jec-maps", caption: "JEC Maps: campus navigation for Jorhat Engineering College. Concept illustration." },
-  { start: 8, end: 12, scene: "m-phish", caption: "M-PHISH: a phishing and web-trust prototype. The example message is synthetic." },
-  { start: 12, end: 16, scene: "tender-ai", caption: "Tender AI: a team internship project at Frint.in." },
-  { start: 16, end: 20, scene: "plugora", caption: "Plugora: a concept for sharing home EV chargers. Sample data." },
-  { start: 20, end: 24, scene: "contact", caption: "Say hello: asimangkan9@gmail.com" },
-];
-
-export const OVERVIEW_DURATION = 24;
-
 export const credits = [
-  { what: "Geist Sans typeface", who: "Vercel", license: "SIL Open Font License 1.1", href: "https://vercel.com/font" },
+  { what: "Geist Sans and Geist Serif typefaces", who: "Vercel, bundled from the geist package", license: "SIL Open Font License 1.1", href: "https://vercel.com/font" },
   { what: "IBM Plex Mono typeface", who: "IBM, via Fontsource", license: "SIL Open Font License 1.1", href: "https://github.com/IBM/plex" },
-  { what: "3D rendering", who: "three.js", license: "MIT", href: "https://threejs.org" },
   { what: "Framework", who: "Next.js and React", license: "MIT", href: "https://nextjs.org" },
-  { what: "Score and sound effects", who: "Original, synthesised live in the browser with the Web Audio API", license: "Made for this site" },
-  { what: "AB monogram, project marks, terrain and previews", who: "Original, generated in code for this site", license: "Made for this site" },
-  { what: "Interaction reference", who: "orchestrated.nl, used as a reference for pacing only", license: "No assets used", href: "https://orchestrated.nl/" },
+  { what: "Interface sound cues", who: "Original, synthesised in the browser with the Web Audio API", license: "Made for this site" },
+  { what: "AB monogram, project marks and interactive demos", who: "Original, written in code for this site", license: "Made for this site" },
 ];
 
 export function getProject(slug: string) {

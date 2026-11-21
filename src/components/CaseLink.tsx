@@ -5,7 +5,7 @@ import { interceptCaseClick } from "@/lib/cases";
 
 export function CaseLink({ slug, className, children }: { slug: string; className?: string; children: ReactNode }) {
   return (
-    <a href={`/work/${slug}`} className={className} data-case-link={slug} onClick={(e) => interceptCaseClick(e, slug)}>
+    <a href={`/work/${slug}`} className={className} data-case-link={slug} data-cursor="Open" onClick={(e) => interceptCaseClick(e, slug)}>
       {children}
     </a>
   );
@@ -16,7 +16,7 @@ export function SmartLink({ href, className, children }: { href: string; classNa
   const m = href.match(/^\/work\/([a-z0-9-]+)$/);
   if (m) {
     return (
-      <a href={href} className={className} onClick={(e) => interceptCaseClick(e, m[1])}>
+      <a href={href} className={className} data-cursor="Open" onClick={(e) => interceptCaseClick(e, m[1])}>
         {children}
       </a>
     );

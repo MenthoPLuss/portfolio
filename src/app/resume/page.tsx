@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { education, experience, person, projects, skills } from "@/content/portfolio";
+import { education, experience, leadership, person, projects, skills } from "@/content/portfolio";
 import { Monogram } from "@/components/Marks";
 import { PrintButton } from "./PrintButton";
 
@@ -24,7 +24,7 @@ export default function ResumePage() {
             <h1>{person.name}</h1>
             <p>Final-year B.Tech CSE student · Software developer</p>
             <p>
-              {person.location} · <a href={`mailto:${person.email}`}>{person.email}</a>
+              {person.location} · <a href={`mailto:${person.email}`}>{person.email}</a> · <a href={person.github.href}>github.com/{person.github.handle}</a>
             </p>
           </div>
         </header>
@@ -48,7 +48,7 @@ export default function ResumePage() {
 
         <section aria-labelledby="r-exp">
           <h2 id="r-exp">Experience and leadership</h2>
-          {[...experience.dated, ...experience.community].map((r) => (
+          {[...experience, ...leadership].map((r) => (
             <div key={r.id} className="resume-item">
               <h3>
                 {r.title}, {r.org}

@@ -4,6 +4,14 @@ import { GeistSans } from "geist/font/sans";
 import { person } from "@/content/portfolio";
 import "./globals.css";
 
+const geistSerif = localFont({
+  src: "../fonts/GeistSerifVF.woff2",
+  variable: "--font-geist-serif",
+  weight: "100 900",
+  display: "swap",
+  fallback: ["Georgia", "Times New Roman", "serif"],
+});
+
 const plexMono = localFont({
   src: [
     { path: "../fonts/ibm-plex-mono-latin-400-normal.woff2", weight: "400", style: "normal" },
@@ -29,8 +37,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B0E0D",
-  colorScheme: "dark",
+  themeColor: "#F5F2EA",
+  colorScheme: "light",
   viewportFit: "cover",
   width: "device-width",
   initialScale: 1,
@@ -41,7 +49,7 @@ const INIT = `(function(){var d=document.documentElement;d.classList.add('js');v
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${plexMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${GeistSans.variable} ${geistSerif.variable} ${plexMono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: INIT }} />
       </head>

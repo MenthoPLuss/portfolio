@@ -2,14 +2,12 @@
 
 | Asset | Source | License |
 | --- | --- | --- |
-| Geist Sans typeface | Vercel, bundled through the `geist` npm package | SIL Open Font License 1.1 |
-| IBM Plex Mono typeface (400, 500, Latin) | IBM, files from `@fontsource/ibm-plex-mono`, copied into `src/fonts` | SIL Open Font License 1.1 |
-| 3D rendering | three.js | MIT |
+| Geist Sans typeface (variable) | Vercel, bundled through the `geist` npm package | SIL Open Font License 1.1 |
+| Geist Serif typeface (variable), used for display type | Vercel, file copied from the `geist` npm package into `src/fonts` | SIL Open Font License 1.1 |
+| IBM Plex Mono typeface (400, 500, Latin) | IBM, files originally from Fontsource, kept in `src/fonts` | SIL Open Font License 1.1 |
 | Framework | Next.js and React | MIT |
-| Score, interface cues, pointer and scroll sound | Original. Synthesised live in the browser with the Web Audio API. No samples. | Made for this site |
-| AB monogram, favicon, four project marks, role marks | Original geometry in `src/lib/mark.ts` | Made for this site |
-| Night terrain, motes, static poster | Original, generated in code | Made for this site |
-| Project previews (campus route, phishing inspection, tender documents, charger booking) | Original canvas illustrations in `src/lib/previews.ts`. All data shown is illustrative. The phishing example uses reserved `example` domains and contains no real links. | Made for this site |
-| Interaction reference | orchestrated.nl, used for pacing and sequence only | No assets used |
+| Interface sound cues | Original. Four short tones synthesised in the browser with the Web Audio API. No samples. | Made for this site |
+| AB monogram, favicon, identity tile, project and role marks | Original geometry in `src/lib/mark.ts` | Made for this site |
+| Interactive demos and their sample data | Original code and invented sample data in `src/features/lab`. The phishing examples use reserved `example` domains and contain no live links. | Made for this site |
 
-No owner-supplied photo was provided. The About section uses a monogram portrait treatment instead.
+No photo of the owner was supplied. The About section uses a typographic identity composition instead.

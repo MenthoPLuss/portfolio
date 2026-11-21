@@ -1,116 +1,88 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { live, ui } from "@/lib/store";
-import { damp, onTick } from "@/lib/ticker";
-
-const ACTIONABLE = 'a[href], button, [role="button"], summary, label, input[type="range"]';
-const TEXTY = "p, h1, h2, h3, h4, li, dd, dt, figcaption, blockquote, .selectable";
-const MAG_MAX = 4;
+import { ui } from "@/lib/store";
+import { animate, damp } from "@/lib/motion/frame";
 
 /**
- * Fine-pointer cursor: a small high-contrast dot and an eased ring over actionable media.
- * The real pointer remains the hit target; the native text cursor shows over prose.
+ * Contextual cursor for fine pointers. The native cursor is never hidden, so
+ * text selection and link affordances behave normally. A small follower shows
+ * a label only where an action is genuinely available (elements with data-cursor).
+ * Its animation loop runs only while it is catching up with the pointer.
  */
 export function Cursor() {
-  const dot = useRef<HTMLDivElement>(null);
-  const ring = useRef<HTMLDivElement>(null);
+  const el = useRef<HTMLDivElement>(null);
+  const label = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    const root = document.documentElement;
+    const node = el.current;
+    const text = label.current;
+    if (!node || !text) return;
     const fine = window.matchMedia("(pointer: fine) and (hover: hover)");
     const forced = window.matchMedia("(forced-colors: active)");
     let enabled = false;
-    let mode: "dot" | "action" | "media" | "text" | "hidden" = "hidden";
-    let rx = 0;
-    let ry = 0;
-    let magEl: HTMLElement | null = null;
-
-    const resetMag = () => {
-      const inner = magEl?.querySelector<HTMLElement>(".mag");
-      if (inner) inner.style.transform = "";
-      magEl = null;
-    };
+    let x = 0;
+    let y = 0;
+    let cx = 0;
+    let cy = 0;
+    let stop: (() => void) | null = null;
 
     const evaluate = () => {
-      const want = fine.matches && !forced.matches && !ui.get().reduceMotion;
-      if (want === enabled) return;
-      enabled = want;
-      root.classList.toggle("cursor", enabled);
-      if (!enabled) resetMag();
+      enabled = fine.matches && !forced.matches && !ui.get().reduceMotion;
+      document.documentElement.classList.toggle("has-cursor", enabled);
+      if (!enabled) node.dataset.show = "false";
     };
 
-    const onOver = (e: PointerEvent) => {
-      if (!enabled || e.pointerType !== "mouse") return;
-      const t = e.target as Element;
-      if (t.closest("[data-cursor=media]") && !t.closest("button")) mode = "media";
-      else if (t.closest(ACTIONABLE)) mode = "action";
-      else if (t.closest(TEXTY)) mode = "text";
-      else mode = "dot";
-      const mag = t.closest<HTMLElement>("[data-magnetic]");
-      if (mag !== magEl) {
-        resetMag();
-        magEl = mag;
-      }
+    const run = () => {
+      if (stop) return;
+      stop = animate((dt) => {
+        cx = damp(cx, x, 0.06, dt);
+        cy = damp(cy, y, 0.06, dt);
+        node.style.transform = `translate3d(${cx.toFixed(1)}px, ${cy.toFixed(1)}px, 0)`;
+        const moving = Math.abs(cx - x) > 0.3 || Math.abs(cy - y) > 0.3;
+        if (!moving) stop = null;
+        return moving;
+      });
     };
+
     const onMove = (e: PointerEvent) => {
       if (!enabled || e.pointerType !== "mouse") return;
-      if (dot.current) dot.current.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0)`;
-      if (magEl) {
-        const r = magEl.getBoundingClientRect();
-        const dx = Math.max(-MAG_MAX, Math.min(MAG_MAX, (e.clientX - (r.left + r.width / 2)) * 0.12));
-        const dy = Math.max(-MAG_MAX, Math.min(MAG_MAX, (e.clientY - (r.top + r.height / 2)) * 0.18));
-        const inner = magEl.querySelector<HTMLElement>(".mag");
-        if (inner) inner.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px)`;
+      x = e.clientX;
+      y = e.clientY;
+      if (node.dataset.show !== "true") {
+        cx = x;
+        cy = y;
       }
+      const target = (e.target as Element | null)?.closest?.<HTMLElement>("[data-cursor]");
+      const want = target?.dataset.cursor ?? "";
+      if (text.textContent !== want) text.textContent = want;
+      node.dataset.show = want ? "true" : "false";
+      run();
     };
     const onLeave = () => {
-      mode = "hidden";
-      resetMag();
+      node.dataset.show = "false";
     };
 
     evaluate();
     fine.addEventListener("change", evaluate);
     forced.addEventListener("change", evaluate);
     const unsub = ui.subscribe(evaluate);
-    document.addEventListener("pointerover", onOver);
     window.addEventListener("pointermove", onMove, { passive: true });
     document.documentElement.addEventListener("mouseleave", onLeave);
-
-    const off = onTick((dt) => {
-      if (!enabled) return;
-      const p = live.pointer;
-      const shown = p.inside ? mode : "hidden";
-      rx = damp(rx, p.x, 0.07, dt);
-      ry = damp(ry, p.y, 0.07, dt);
-      if (Math.abs(rx - p.x) > 300 || Math.abs(ry - p.y) > 300) {
-        rx = p.x;
-        ry = p.y;
-      }
-      if (ring.current) {
-        ring.current.style.transform = `translate3d(${rx.toFixed(1)}px, ${ry.toFixed(1)}px, 0)`;
-        ring.current.dataset.mode = shown;
-      }
-      if (dot.current) dot.current.dataset.mode = shown;
-    }, 5);
-
     return () => {
-      off();
+      stop?.();
       unsub();
-      resetMag();
-      root.classList.remove("cursor");
       fine.removeEventListener("change", evaluate);
       forced.removeEventListener("change", evaluate);
-      document.removeEventListener("pointerover", onOver);
       window.removeEventListener("pointermove", onMove);
       document.documentElement.removeEventListener("mouseleave", onLeave);
+      document.documentElement.classList.remove("has-cursor");
     };
   }, []);
 
   return (
-    <>
-      <div ref={ring} className="cursor-ring" aria-hidden="true" data-mode="hidden" />
-      <div ref={dot} className="cursor-dot" aria-hidden="true" data-mode="hidden" />
-    </>
+    <div ref={el} className="cursor" data-show="false" aria-hidden="true">
+      <span ref={label} className="cursor-label" />
+    </div>
   );
 }

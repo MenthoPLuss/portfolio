@@ -1,43 +1,49 @@
-import { about, education, experience, person, projects, skills } from "@/content/portfolio";
-import { APERTURE } from "@/lib/mark";
+import { about, credits, editorial, education, experience, leadership, person, projects, skills, type Role } from "@/content/portfolio";
+import { LabStage } from "@/features/lab/LabStage";
 import { ClientRoot } from "./ClientRoot";
 import { CaseLink, SmartLink } from "./CaseLink";
 import { CopyEmail } from "./CopyEmail";
-import { CreditsDetails } from "./CreditsDetails";
 import { EvidenceTerm } from "./EvidenceTerm";
-import { HeroAperture } from "./HeroAperture";
-import { Loader } from "./Loader";
-import { Monogram, ProjectIcon } from "./Marks";
+import { LivingType } from "./editorial/LivingType";
+import { Nav } from "./editorial/Nav";
+import { MarkTile, Monogram, ProjectIcon } from "./Marks";
 import { MenuToggle } from "./MenuToggle";
 import { MotionToggle } from "./MotionToggle";
-import { PlayOverview } from "./PlayOverview";
-import { ProjectPoster } from "./ProjectPoster";
-import { SoundControl } from "./SoundControl";
+import { SoundToggle } from "./SoundToggle";
 
-const pct = (v: number) => `${((v / 32) * 100).toFixed(3)}%`;
-
-function StaticPoster() {
-  // Low-contrast night terrain, shown first and whenever WebGL is unavailable.
+function SectionHead({ index, id, title, dek }: { index: string; id: string; title: string; dek?: string }) {
   return (
-    <div className="hero-poster" aria-hidden="true">
-      <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice">
-        <defs>
-          <radialGradient id="pool" cx="50%" cy="62%" r="38%">
-            <stop offset="0" stopColor="#FFAF76" stopOpacity="0.22" />
-            <stop offset="1" stopColor="#FFAF76" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <path d="M0 560 C180 520 300 470 460 500 C600 528 700 470 820 486 C960 504 1060 450 1220 470 C1380 490 1480 520 1600 506 V900 H0 Z" fill="#141a16" />
-        <path d="M0 640 C220 600 360 620 520 610 C700 598 760 640 980 630 C1180 620 1300 590 1600 620 V900 H0 Z" fill="#181f1a" />
-        <ellipse cx="800" cy="640" rx="560" ry="190" fill="url(#pool)" />
-        <g fill="none" stroke="#B7D0A5" strokeOpacity="0.08" strokeWidth="1.2">
-          <path d="M60 720 C320 690 520 704 780 698 C1040 692 1240 710 1540 690" />
-          <path d="M20 780 C300 750 560 772 820 760 C1080 748 1300 772 1580 750" />
-          <path d="M0 840 C260 820 540 836 800 828 C1060 820 1340 842 1600 826" />
-        </g>
-        <path d="M640 900 C700 820 760 770 800 700 M800 700 C860 760 980 800 1120 900 M800 700 C760 660 700 640 640 610" fill="none" stroke="#F3EFE4" strokeOpacity="0.07" strokeWidth="2" />
-      </svg>
-    </div>
+    <header className="section-head">
+      <p className="section-index mono" aria-hidden="true">
+        <span className="index-square" />({index})
+      </p>
+      <h2 id={id} className="section-title" data-reveal="mask" tabIndex={-1}>
+        <span>{title}</span>
+      </h2>
+      {dek ? <p className="section-dek">{dek}</p> : null}
+    </header>
+  );
+}
+
+function RoleRow({ role, undatedLabel }: { role: Role; undatedLabel?: string }) {
+  return (
+    <li id={role.id} className="index-row">
+      <p className="index-date mono">{role.dates ?? undatedLabel ?? ""}</p>
+      <div className="index-main">
+        <h3>
+          {role.org}
+          <span className="index-sub">{role.title}</span>
+        </h3>
+        {role.detail ? <p>{role.detail}</p> : null}
+      </div>
+      <p className="index-side">
+        {role.evidence ? (
+          <SmartLink href={role.evidence.href} className="text-link">
+            {role.evidence.label}
+          </SmartLink>
+        ) : null}
+      </p>
+    </li>
   );
 }
 
@@ -47,283 +53,293 @@ export function Site({ initialCase }: { initialCase: string | null }) {
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <Loader skip={!!initialCase} />
       <div id="page">
         <header className="site-header">
-          <a className="wordmark" href="#top">
-            <Monogram className="wordmark-mark" stroke={2.2} />
-            <span>{person.name}</span>
+          <a className="brand" href="#top" aria-label={`${person.name}, back to top`}>
+            <MarkTile />
+            <span className="brand-name">{person.name}</span>
           </a>
-          <nav id="site-nav" aria-label="Primary">
-            <ul>
-              <li>
-                <a href="#work" data-nav>
-                  Work
-                </a>
-              </li>
-              <li>
-                <a href="#skills" data-nav>
-                  Skills
-                </a>
-              </li>
-              <li>
-                <a href="#about" data-nav>
-                  About
-                </a>
-              </li>
-              <li>
-                <a href="#contact" data-nav>
-                  Contact
-                </a>
-              </li>
-            </ul>
-            <MotionToggle className="nav-motion" />
-          </nav>
-          <MenuToggle />
+          <Nav />
+          <div className="header-tools">
+            <a className="header-resume" href={person.resume.href} data-cursor="View">
+              Résumé
+            </a>
+            <SoundToggle />
+            <MenuToggle />
+          </div>
         </header>
 
         <main id="main" tabIndex={-1}>
-          {/* ---------------------------------------------------------- hero + descent */}
+          {/* ------------------------------------------------------------ hero */}
           <section id="top" className="hero" aria-labelledby="hero-title">
-            <div className="hero-sticky">
-              <StaticPoster />
-              <div className="hero-mark-wrap">
-                <div className="hero-mark-box" data-mark-box>
-                  <Monogram className="hero-mark-svg" />
-                  <div
-                    className="aperture"
-                    style={{ left: pct(APERTURE.x), top: pct(APERTURE.y), width: pct(APERTURE.w), height: pct(APERTURE.h) }}
-                  >
-                    <HeroAperture />
-                  </div>
-                  <div className="play-slot" style={{ top: pct(28) }}>
-                    <PlayOverview />
-                  </div>
-                </div>
-              </div>
-
-              <div className="hero-copy">
-                <p className="hero-name mono">{person.name}</p>
-                <h1 id="hero-title">{person.headline}</h1>
-                <p className="lede">{person.supporting}</p>
-                <p className="hero-links">
-                  <a className="text-link strong" href="#work">
-                    Explore projects
-                  </a>
-                  <a className="text-link" href={person.resume.href}>
-                    {person.resume.label}
-                  </a>
-                </p>
-              </div>
-
-              <div className="hero-intro">
-                <p>{person.intro}</p>
-              </div>
-
-              <a className="scroll-cue mono" href="#about">
-                <span>Scroll</span>
-                <i aria-hidden="true" />
-              </a>
-            </div>
-          </section>
-
-          {/* ---------------------------------------------------------- about */}
-          <section id="about" className="section about grid" aria-labelledby="about-title">
-            <div className="about-side" data-reveal>
-              <h2 id="about-title" className="section-title">
-                {about.heading}
-              </h2>
-              <figure className="portrait">
-                <div className="portrait-frame" aria-hidden="true">
-                  <svg viewBox="0 0 120 150" className="portrait-contours">
-                    {Array.from({ length: 9 }).map((_, i) => (
-                      <ellipse key={i} cx="60" cy="96" rx={14 + i * 9} ry={8 + i * 6} fill="none" />
-                    ))}
-                  </svg>
-                  <Monogram className="portrait-mark" />
-                </div>
-                <figcaption className="mono small muted">Monogram portrait · {person.location}</figcaption>
-              </figure>
-            </div>
-            <div className="about-text" data-reveal>
-              {about.paragraphs.map((para, i) => (
-                <p key={i}>
-                  {para.map((seg, j) => (typeof seg === "string" ? <span key={j}>{seg}</span> : <EvidenceTerm key={seg.id} term={seg} />))}
-                </p>
+            <div className="hero-meta mono">
+              <span>(00)</span>
+              {editorial.heroMeta.map((m) => (
+                <span key={m}>{m}</span>
               ))}
-              <dl className="facts">
-                <div>
-                  <dt>Studying</dt>
-                  <dd>B.Tech CSE, final year, Jorhat Engineering College</dd>
-                </div>
-                <div>
-                  <dt>Based in</dt>
-                  <dd>{person.location}</dd>
-                </div>
-              </dl>
+              <span className="hero-meta-role">{person.role}</span>
             </div>
+            <LivingType />
+            <div className="hero-foot">
+              <div className="hero-id">
+                <p className="hero-name">{person.name}</p>
+                <p className="mono hero-cred">Final-year B.Tech CSE · Jorhat Engineering College</p>
+              </div>
+              <p className="hero-text">{editorial.heroText}</p>
+              <div className="hero-actions">
+                <a className="btn btn-ink" href="#work">
+                  Explore selected work
+                </a>
+                <a className="btn btn-line" href={person.resume.href} data-cursor="View">
+                  View résumé
+                </a>
+              </div>
+            </div>
+            <a className="hero-scroll mono" href="#work">
+              <span className="hero-scroll-line" aria-hidden="true" />
+              Scroll · (01) Selected work
+            </a>
           </section>
 
-          {/* ---------------------------------------------------------- work */}
+          {/* ------------------------------------------------------------ work */}
           <section id="work" className="section work" aria-labelledby="work-title">
-            <div className="section-head grid">
-              <h2 id="work-title" className="section-title" tabIndex={-1}>
-                Selected projects
-              </h2>
-              <p className="section-note">Four projects, from campus navigation to an internship team build. Previews are original illustrations, labelled on each card.</p>
-            </div>
-            <div className="work-grid">
+            <SectionHead index="01" id="work-title" title="Selected work" dek="Four projects, each with a working demonstration. Demos run in your browser on sample data and say so." />
+            <div className="exhibits">
               {projects.map((p, i) => (
-                <article key={p.slug} className={`card card-${i + 1}`} aria-labelledby={`p-${p.slug}`} data-reveal>
-                  <ProjectPoster project={p} />
-                  <div className="card-caption">
-                    <p className="card-status mono">
+                <article key={p.slug} className={`exhibit exhibit-${i % 2 ? "b" : "a"} theme-${p.slug}`} aria-labelledby={`p-${p.slug}`} data-reveal="exhibit">
+                  <div className="exhibit-text">
+                    <p className="exhibit-num" aria-hidden="true">
+                      {p.number}
+                    </p>
+                    <p className="exhibit-status mono">
                       <ProjectIcon name={p.icon} className="icon-sm" />
                       {p.status}
                     </p>
                     <h3 id={`p-${p.slug}`}>{p.title}</h3>
-                    <p className="card-summary">{p.summary}</p>
-                    <CaseLink slug={p.slug} className="text-link strong">
-                      View case<span className="sr-only">: {p.title}</span>
-                    </CaseLink>
+                    <p className="exhibit-summary">{p.summary}</p>
+                    <ul className="tags" aria-label={`${p.title} technologies`}>
+                      {p.tech.map((t) => (
+                        <li key={t}>{t}</li>
+                      ))}
+                    </ul>
+                    <p className="exhibit-links">
+                      <CaseLink slug={p.slug} className="link-arrow">
+                        Read case study<span className="sr-only">: {p.title}</span>
+                      </CaseLink>
+                      {p.links[0] ? (
+                        <a className="text-link" href={p.links[0].href} target="_blank" rel="noopener noreferrer" data-cursor="Visit">
+                          {p.slug === "tender-ai" ? "Team repository" : "Repository"}
+                          <span className="sr-only"> for {p.title} (opens in a new tab)</span>
+                          <span aria-hidden="true"> ↗</span>
+                        </a>
+                      ) : null}
+                    </p>
                   </div>
+                  <figure className="exhibit-figure">
+                    <figcaption className="mono exhibit-caption">
+                      <span>{p.demo.kind}</span>
+                      <span>Interactive</span>
+                    </figcaption>
+                    <LabStage slug={p.slug} context="exhibit" />
+                  </figure>
                 </article>
               ))}
             </div>
           </section>
 
-          {/* ---------------------------------------------------------- skills */}
-          <section id="skills" className="section rows-section" aria-labelledby="skills-title">
-            <div className="section-head grid">
-              <h2 id="skills-title" className="section-title">
-                Skills
-              </h2>
-              <p className="section-note">Grouped by where they were used.</p>
-            </div>
-            <ul className="rows" data-reveal>
-              {skills.map((g) => (
-                <li key={g.name} className="row">
-                  <h3 className="row-name">{g.name}</h3>
-                  <p className="row-main">{g.items.join(" · ")}</p>
-                  <p className="row-side">
-                    <span className="mono small muted">Evidence </span>
-                    {g.evidence.map((ev, k) => (
-                      <span key={ev.href + ev.label}>
-                        {k > 0 ? ", " : ""}
-                        <SmartLink href={ev.href} className="text-link">
-                          {ev.label}
-                        </SmartLink>
-                      </span>
+          {/* ------------------------------------------------------------ about */}
+          <section id="about" className="section about" aria-labelledby="about-title">
+            <SectionHead index="02" id="about-title" title="About" />
+            <p className="statement" data-reveal="lines">
+              {editorial.aboutStatement.map((line, i) => (
+                <span key={line} className="statement-line" style={{ ["--i" as string]: i }}>
+                  <span>{line}</span>
+                </span>
+              ))}
+            </p>
+            <div className="about-grid">
+              <figure className="identity" aria-label="Typographic identity">
+                <div className="identity-plate" aria-hidden="true">
+                  <Monogram className="identity-mark" stroke={1.2} />
+                  <span className="identity-initials">A/B</span>
+                </div>
+                <figcaption className="mono">
+                  <span>{person.name}</span>
+                  <span>{person.location}</span>
+                  <span>B.Tech CSE · JEC · Final year</span>
+                </figcaption>
+              </figure>
+              <div className="about-text" data-reveal="fade">
+                {about.paragraphs.map((para, i) => (
+                  <p key={i}>{para.map((seg, j) => (typeof seg === "string" ? <span key={j}>{seg}</span> : <EvidenceTerm key={seg.id} term={seg} />))}</p>
+                ))}
+                <div className="intersection">
+                  <p className="mono">At the intersection of</p>
+                  <ul>
+                    {editorial.intersection.map((x) => (
+                      <li key={x}>{x}</li>
                     ))}
-                  </p>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ------------------------------------------------------------ skills */}
+          <section id="skills" className="section" aria-labelledby="skills-title">
+            <SectionHead index="03" id="skills-title" title="Skills" dek="Grouped by where they were used. Open a group to see the evidence." />
+            <ol className="skills" data-reveal="fade">
+              {skills.map((g, i) => (
+                <li key={g.name} className="skill">
+                  <span className="skill-num mono" aria-hidden="true">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <h3 className="skill-name">{g.name}</h3>
+                  <p className="skill-items">{g.items.join(" · ")}</p>
+                  <details className="skill-evidence">
+                    <summary>
+                      Evidence <span className="mono">({g.evidence.length})</span>
+                      <span className="sr-only"> for {g.name}</span>
+                    </summary>
+                    <ul>
+                      {g.evidence.map((ev) => (
+                        <li key={ev.label + ev.href}>
+                          <SmartLink href={ev.href} className="text-link">
+                            {ev.label}
+                          </SmartLink>
+                          <span>{ev.why}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 </li>
+              ))}
+            </ol>
+          </section>
+
+          {/* ------------------------------------------------------------ experience */}
+          <section id="experience" className="section" aria-labelledby="experience-title">
+            <SectionHead index="04" id="experience-title" title="Experience" />
+            <ul className="index-list" data-reveal="fade">
+              {experience.map((r) => (
+                <RoleRow key={r.id} role={r} />
               ))}
             </ul>
           </section>
 
-          {/* ---------------------------------------------------------- experience */}
-          <section id="experience" className="section rows-section" aria-labelledby="experience-title">
-            <div className="section-head grid">
-              <h2 id="experience-title" className="section-title">
-                Experience &amp; leadership
-              </h2>
-            </div>
-            <ul className="rows" data-reveal>
-              {experience.dated.map((r) => (
-                <li key={r.id} id={r.id} className="row">
-                  <p className="row-date mono">{r.dates}</p>
-                  <div className="row-main">
-                    <h3>
-                      {r.title}, <span className="muted-strong">{r.org}</span>
-                    </h3>
-                    {r.detail ? <p>{r.detail}</p> : null}
-                  </div>
-                  <p className="row-side">
-                    {r.evidence ? (
-                      <SmartLink href={r.evidence.href} className="text-link">
-                        {r.evidence.label}
-                      </SmartLink>
-                    ) : null}
-                  </p>
-                </li>
-              ))}
-            </ul>
-            <h3 className="rows-subhead">
-              Community roles <span className="mono small muted">· ongoing, undated</span>
-            </h3>
-            <ul className="rows" data-reveal>
-              {experience.community.map((r) => (
-                <li key={r.id} id={r.id} className="row">
-                  <p className="row-date mono">Undated</p>
-                  <div className="row-main">
-                    <h3>
-                      {r.title}, <span className="muted-strong">{r.org}</span>
-                    </h3>
-                    {r.detail ? <p>{r.detail}</p> : null}
-                  </div>
-                  <p className="row-side" />
-                </li>
+          {/* ------------------------------------------------------------ leadership */}
+          <section id="leadership" className="section" aria-labelledby="leadership-title">
+            <SectionHead index="05" id="leadership-title" title="Leadership" dek="Student communities and campus organisations. Roles without dates are listed as such." />
+            <ul className="index-list" data-reveal="fade">
+              {leadership.map((r) => (
+                <RoleRow key={r.id} role={r} undatedLabel="Dates not listed" />
               ))}
             </ul>
           </section>
 
-          {/* ---------------------------------------------------------- education */}
-          <section id="education" className="section rows-section" aria-labelledby="education-title">
-            <div className="section-head grid">
-              <h2 id="education-title" className="section-title">
-                Education
-              </h2>
-            </div>
-            <ul className="rows" data-reveal>
+          {/* ------------------------------------------------------------ education */}
+          <section id="education" className="section" aria-labelledby="education-title">
+            <SectionHead index="06" id="education-title" title="Education" />
+            <ul className="index-list" data-reveal="fade">
               {education.map((e) => (
-                <li key={e.title} className="row">
-                  <p className="row-date mono">{e.dates}</p>
-                  <div className="row-main">
-                    <h3>{e.title}</h3>
-                    <p>{e.org}</p>
+                <li key={e.title} className="index-row">
+                  <p className="index-date mono">{e.dates}</p>
+                  <div className="index-main">
+                    <h3>
+                      {e.title}
+                      <span className="index-sub">{e.org}</span>
+                    </h3>
                   </div>
-                  <p className="row-side" />
+                  <p className="index-side" />
                 </li>
               ))}
             </ul>
           </section>
 
-          {/* ---------------------------------------------------------- contact */}
+          {/* ------------------------------------------------------------ contact */}
           <section id="contact" className="section contact" aria-labelledby="contact-title">
-            <h2 id="contact-title" className="section-title">
-              Contact
+            <p className="section-index mono" aria-hidden="true">
+              <span className="index-square" />
+              (07)
+            </p>
+            <h2 id="contact-title" className="contact-title" data-reveal="lines">
+              <span className="statement-line" style={{ ["--i" as string]: 0 }}>
+                <span>{editorial.contactStatement}</span>
+              </span>
             </h2>
-            <p className="contact-lede">Email is the quickest way to reach me. Based in {person.location}.</p>
-            <a className="email-big" href={`mailto:${person.email}`}>
+            <p className="contact-line">{editorial.contactLine}</p>
+            <a className="contact-email" href={`mailto:${person.email}`} data-cursor="Write">
               {person.email}
             </a>
             <CopyEmail email={person.email} />
-            <p className="contact-links">
-              <a className="text-link strong" href={person.resume.href}>
-                {person.resume.label}
-              </a>
-              <a className="text-link" href="#top">
-                Back to top
-              </a>
-            </p>
-            <div className="contact-mark" aria-hidden="true">
-              <Monogram />
+            <ul className="contact-links">
+              <li>
+                <a className="text-link" href={person.github.href} target="_blank" rel="noopener noreferrer" data-cursor="Visit">
+                  {person.github.label} · {person.github.handle}
+                  <span className="sr-only"> (opens in a new tab)</span>
+                  <span aria-hidden="true"> ↗</span>
+                </a>
+              </li>
+              <li>
+                <a className="text-link" href={person.resume.href} data-cursor="View">
+                  {person.resume.label}
+                </a>
+              </li>
+              <li>
+                <a className="text-link" href="#top">
+                  Back to top
+                </a>
+              </li>
+            </ul>
+            <div className="sign-off" aria-hidden="true">
+              <MarkTile large />
+              <span className="mono">Asimangkan Boro · {person.location}</span>
             </div>
           </section>
         </main>
 
-        <footer className="site-footer">
-          <p className="small muted">© 2026 {person.name}. Built with original code, marks and sound.</p>
-          <CreditsDetails />
-          <div className="footer-actions">
-            <MotionToggle />
-            <a className="text-link" href="#top">
-              Back to top
-            </a>
+        {/* ------------------------------------------------------------ credits */}
+        <footer id="credits" className="site-footer" aria-labelledby="credits-title">
+          <div className="footer-grid">
+            <div>
+              <p className="section-index mono" aria-hidden="true">
+                <span className="index-square" />
+                (08)
+              </p>
+              <h2 id="credits-title" className="footer-title">
+                Credits
+              </h2>
+            </div>
+            <ul className="credits">
+              {credits.map((c) => (
+                <li key={c.what}>
+                  <span className="credit-what">{c.what}</span>
+                  <span className="credit-who">
+                    {c.href ? (
+                      <a className="text-link" href={c.href} target="_blank" rel="noopener noreferrer">
+                        {c.who}
+                        <span className="sr-only"> (opens in a new tab)</span>
+                      </a>
+                    ) : (
+                      c.who
+                    )}
+                  </span>
+                  <span className="credit-license mono">{c.license}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="footer-bottom">
+            <p className="mono">© 2026 {person.name}</p>
+            <div className="footer-tools">
+              <MotionToggle />
+              <SoundToggle />
+              <a className="text-link" href="#top">
+                Back to top
+              </a>
+            </div>
           </div>
         </footer>
-
-        <SoundControl />
       </div>
       <ClientRoot initialCase={initialCase} />
     </>

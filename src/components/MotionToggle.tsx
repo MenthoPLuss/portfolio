@@ -8,7 +8,7 @@ export function MotionToggle({ className }: { className?: string }) {
   return (
     <button
       type="button"
-      className={`pill motion-toggle ${className ?? ""}`}
+      className={`toggle motion-toggle ${className ?? ""}`}
       aria-pressed={reduce}
       onClick={() => {
         const next = reduce ? "full" : "reduce";

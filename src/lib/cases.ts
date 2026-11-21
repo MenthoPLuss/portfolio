@@ -1,5 +1,6 @@
+import { flushSync } from "react-dom";
 import { projects } from "@/content/portfolio";
-import { sfx, suppressVelocity, ui } from "./store";
+import { sfx, ui } from "./store";
 
 /**
  * Case-study routing over the History API. Each case has a stable URL (/work/<slug>).
@@ -31,6 +32,24 @@ function show(slug: string) {
   document.title = titleFor(slug);
 }
 
+/**
+ * Shared-element transition: the exhibit stage and the case media share a
+ * view-transition-name, so the browser morphs one into the other. Without
+ * View Transitions support, or with reduced motion, the update simply applies.
+ */
+function withTransition(update: () => void) {
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+  if (typeof doc.startViewTransition !== "function" || ui.get().reduceMotion) {
+    update();
+    return;
+  }
+  try {
+    doc.startViewTransition(() => flushSync(update));
+  } catch {
+    update();
+  }
+}
+
 function manualScroll() {
   try {
     window.history.scrollRestoration = "manual";
@@ -54,8 +73,8 @@ export function openCase(slug: string, from?: HTMLElement | null) {
   direct = false;
   window.history.pushState({ abCase: slug }, "", `/work/${slug}`);
   pushed = true;
-  show(slug);
-  sfx("caseOpen");
+  withTransition(() => show(slug));
+  sfx("open");
 }
 
 /** Called once on load when the URL is a case URL. */
@@ -96,7 +115,6 @@ function finishClose() {
   returnFocus = null;
   // Runs from the case layer's effect, after React has removed the dialog and the inert page state.
   pendingRestore = () => {
-    suppressVelocity(8);
     if (wasDirect) {
       document.getElementById("work")?.scrollIntoView({ block: "start", behavior: "instant" as ScrollBehavior });
       document.getElementById("work-title")?.focus({ preventScroll: true });
@@ -105,9 +123,9 @@ function finishClose() {
       if (target && document.contains(target)) target.focus({ preventScroll: true });
     }
   };
-  ui.set({ caseSlug: null });
+  withTransition(() => ui.set({ caseSlug: null }));
   document.title = baseTitle || "Asimangkan Boro · Software developer from Assam";
-  sfx("caseClose");
+  sfx("close");
 }
 
 /** Called by the case layer once the closed state has committed. */
@@ -126,8 +144,9 @@ export function onPopState() {
       returnFocus = document.querySelector<HTMLElement>(`[data-case-link="${slug}"]`);
     }
     pushed = true;
-    show(slug);
-    if (!current) sfx("caseOpen");
+    if (current) show(slug);
+    else withTransition(() => show(slug));
+    if (!current) sfx("open");
   } else if (!slug && current) {
     finishClose();
   }
